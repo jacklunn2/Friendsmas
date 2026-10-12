@@ -10,7 +10,7 @@ import {
   type PublicTeam,
 } from "../../../shared/types";
 import { useTicker, type ConnStatus } from "../net";
-import { ConnectionBanner, formatClock, teamStyle, Wordmark } from "../ui";
+import { Avatar, ConnectionBanner, EventCodeContext, formatClock, teamStyle, Wordmark } from "../ui";
 
 type Send = <T = unknown>(action: string, payload?: Record<string, unknown>) => Promise<T>;
 type Run = <T = unknown>(action: string, payload?: Record<string, unknown>, okText?: string) => Promise<T | undefined>;
@@ -48,6 +48,7 @@ export function ControlRoom({ view, status, send, serverNow }: Props) {
   const drafting = view.draw.phase === "draft";
 
   return (
+    <EventCodeContext.Provider value={view.eventCode}>
     <main className="host">
       <ConnectionBanner status={status} />
       <TopBar view={view} run={run} status={status} />
@@ -63,6 +64,7 @@ export function ControlRoom({ view, status, send, serverNow }: Props) {
         </div>
       )}
     </main>
+    </EventCodeContext.Provider>
   );
 }
 
@@ -240,7 +242,7 @@ function GuestsPanel({ view, run }: { view: HostView; run: Run }) {
             {pending.map((p) => (
               <li key={p.id} className="row">
                 <span className="row__name">
-                  {p.emoji} {p.name}
+                  <Avatar player={p} /> {p.name}
                 </span>
                 <span className="row__actions">
                   <button className="btn btn--small btn--primary" onClick={() => run("guest.approve", { id: p.id })}>
@@ -324,6 +326,14 @@ function RosterRow({ player: p, team, run }: { player: HostPlayer; team?: Public
   if (p.status === "excluded" || p.status === "left") actions.push({ label: "Include again", onClick: () => run("guest.include", { id: p.id }) });
   if (p.teamId && p.status === "joined") actions.push({ label: "Mark as gone home", onClick: () => run("guest.leave", { id: p.id }) });
   if (!p.isTest) actions.push({ label: "Make a rejoin code", onClick: () => run("guest.rejoinCode", { id: p.id }) });
+  if (p.photo) {
+    actions.push({
+      label: "Remove their photo",
+      onClick: () => {
+        if (confirm(`Remove ${p.name}'s photo? They can add a new one from their phone.`)) run("guest.removePhoto", { id: p.id });
+      },
+    });
+  }
   if (p.hasDevice) {
     actions.push({
       label: "Unlink their phone",
@@ -344,7 +354,7 @@ function RosterRow({ player: p, team, run }: { player: HostPlayer; team?: Public
   return (
     <li className={`roster__row roster__row--${p.status}`}>
       <span className="row__name">
-        <span aria-hidden>{p.status === "expected" ? "·" : p.emoji}</span> {p.name}
+        {p.status === "expected" ? <span aria-hidden>·</span> : <Avatar player={p} />} {p.name}
         {p.isTest && <span className="tag">test</span>}
       </span>
       <span className="row__status">
@@ -486,7 +496,7 @@ function TeamsPanel({ view, run }: { view: HostView; run: Run }) {
             {unassigned.map((p) => (
               <li key={p.id} className="row">
                 <span className="row__name">
-                  {p.emoji} {p.name}
+                  <Avatar player={p} /> {p.name}
                 </span>
                 <AddToTeam player={p} teams={view.teams} run={run} />
               </li>
@@ -574,7 +584,7 @@ function TeamEditor({
           return (
             <li key={id} className="row">
               <span className="row__name">
-                {p.emoji} {p.name}
+                <Avatar player={p} /> {p.name}
                 {p.status === "left" && <span className="tag">gone home</span>}
               </span>
               {complete && (

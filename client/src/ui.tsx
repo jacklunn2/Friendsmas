@@ -1,5 +1,5 @@
-import type { CSSProperties, ReactNode } from "react";
-import { AVATARS, teamDisplayName, type PublicPlayer, type PublicTeam } from "../../shared/types";
+import { createContext, useContext, useState, type CSSProperties, type ReactNode } from "react";
+import { AVATARS, photoUrl, teamDisplayName, type PublicPlayer, type PublicTeam } from "../../shared/types";
 import type { ConnStatus } from "./net";
 
 export function ConnectionBanner({ status }: { status: ConnStatus }) {
@@ -8,6 +8,26 @@ export function ConnectionBanner({ status }: { status: ConnStatus }) {
     <div className="conn-banner" role="status">
       {status === "connecting" ? "Connecting…" : "Reconnecting… your place is saved."}
     </div>
+  );
+}
+
+/** The event code, needed to load guest photos. Provided once per screen. */
+export const EventCodeContext = createContext("");
+
+type AvatarPlayer = Pick<PublicPlayer, "id" | "emoji" | "photo">;
+
+/** A guest's photo, or their emoji if they haven't added one. */
+export function Avatar({ player, className = "" }: { player: AvatarPlayer; className?: string }) {
+  const code = useContext(EventCodeContext);
+  const url = photoUrl(player, code);
+  const [failed, setFailed] = useState<string | null>(null);
+  if (url && failed !== url) {
+    return <img className={`avatar avatar--photo ${className}`} src={url} alt="" draggable={false} onError={() => setFailed(url)} />;
+  }
+  return (
+    <span className={`avatar ${className}`} aria-hidden>
+      {player.emoji}
+    </span>
   );
 }
 
@@ -41,9 +61,7 @@ export function TeamCard({ team, players, showSeats, highlightId, size = "md", f
           if (!p) return null;
           return (
             <li key={id} className={`member${id === highlightId ? " member--new" : ""}${p.status === "left" ? " member--left" : ""}`}>
-              <span className="member__emoji" aria-hidden>
-                {p.emoji}
-              </span>
+              <Avatar player={p} className="member__emoji" />
               {p.name}
             </li>
           );

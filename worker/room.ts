@@ -3,7 +3,7 @@
 // spin or two simultaneous awards can never collide.
 
 import { DurableObject } from "cloudflare:workers";
-import type { AuditEntry, ClientRequest, Role, ServerMessage } from "../shared/types";
+import { PHOTO_MAX_BYTES, type AuditEntry, type ClientRequest, type Role, type ServerMessage } from "../shared/types";
 import { onAlarm, runAction, UserError, type Actor } from "./logic";
 import { randomToken } from "./random";
 import { freshState, type ServerState } from "./state";
@@ -34,6 +34,10 @@ export class EventRoom extends DurableObject<Env> {
       ctx.storage.sql.exec(
         "CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, action TEXT NOT NULL, detail TEXT NOT NULL)",
       );
+      // Guest profile photos: small square JPEGs, resized on the phone.
+      ctx.storage.sql.exec(
+        "CREATE TABLE IF NOT EXISTS photos (player_id TEXT PRIMARY KEY, data BLOB NOT NULL, updated_at INTEGER NOT NULL)",
+      );
       const stored = await ctx.storage.get<ServerState>("state");
       if (stored) {
         this.state = stored;
@@ -51,6 +55,9 @@ export class EventRoom extends DurableObject<Env> {
     const url = new URL(request.url);
     if (url.pathname === "/api/host/login" && request.method === "POST") return this.hostLogin(request);
     if (url.pathname === "/api/ws") return this.openSocket(request, url);
+    if (url.pathname === "/api/photo" && request.method === "POST") return this.uploadPhoto(request);
+    const photo = url.pathname.match(/^\/api\/photo\/([a-z0-9]+)$/);
+    if (photo && request.method === "GET") return this.servePhoto(photo[1], url);
     return Response.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -78,6 +85,59 @@ export class EventRoom extends DurableObject<Env> {
     await this.ctx.storage.put("state", this.state);
     this.audit("host.login", "Host signed in");
     return Response.json({ token });
+  }
+
+  // -------------------------------------------------------------------------
+  // Photos
+
+  private async uploadPhoto(request: Request): Promise<Response> {
+    const declared = Number(request.headers.get("content-length") ?? "0");
+    if (declared > PHOTO_MAX_BYTES) return Response.json({ error: "That photo is too large." }, { status: 413 });
+    // Read the body before answering, so every response leaves the connection clean.
+    const data = await request.arrayBuffer();
+    const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+    const me = token ? this.state.players.find((p) => p.token === token) : undefined;
+    if (!me) return Response.json({ error: "Join the event first, then add your photo." }, { status: 401 });
+    if (!(request.headers.get("content-type") ?? "").startsWith("image/jpeg")) {
+      return Response.json({ error: "Photos must be JPEG images." }, { status: 415 });
+    }
+    if (data.byteLength > PHOTO_MAX_BYTES) return Response.json({ error: "That photo is too large." }, { status: 413 });
+    const head = new Uint8Array(data, 0, Math.min(3, data.byteLength));
+    if (data.byteLength < 100 || head[0] !== 0xff || head[1] !== 0xd8 || head[2] !== 0xff) {
+      return Response.json({ error: "That doesn't look like a photo." }, { status: 415 });
+    }
+    const now = Date.now();
+    this.ctx.storage.sql.exec(
+      "INSERT OR REPLACE INTO photos (player_id, data, updated_at) VALUES (?, ?, ?)",
+      me.id,
+      data,
+      now,
+    );
+    me.photo = (me.photo ?? 0) + 1;
+    this.state.version += 1;
+    await this.ctx.storage.put("state", this.state);
+    this.audit("player.photo", `${me.name} added a photo`, now);
+    this.broadcast();
+    return Response.json({ photo: me.photo });
+  }
+
+  private servePhoto(playerId: string, url: URL): Response {
+    if (url.searchParams.get("c") !== this.state.eventCode) return new Response("Not found", { status: 404 });
+    const row = this.ctx.storage.sql
+      .exec<{ data: ArrayBuffer }>("SELECT data FROM photos WHERE player_id = ?", playerId)
+      .toArray()[0];
+    if (!row) return new Response("Not found", { status: 404 });
+    return new Response(row.data, {
+      headers: {
+        "content-type": "image/jpeg",
+        // The URL changes whenever the photo does, so it can be cached for good.
+        "cache-control": "private, max-age=31536000, immutable",
+      },
+    });
+  }
+
+  private deletePhotos(ids: string[]): void {
+    for (const id of ids) this.ctx.storage.sql.exec("DELETE FROM photos WHERE player_id = ?", id);
   }
 
   private openSocket(request: Request, url: URL): Response {
@@ -159,6 +219,7 @@ export class EventRoom extends DurableObject<Env> {
       this.state = draft;
       await this.ctx.storage.put("state", this.state);
       if (result.audit) this.audit(result.audit[0], result.audit[1], now);
+      if (result.deletePhotos) this.deletePhotos(result.deletePhotos);
       if (result.alarmAt !== undefined) {
         if (result.alarmAt === null) await this.ctx.storage.deleteAlarm();
         else await this.ctx.storage.setAlarm(result.alarmAt);

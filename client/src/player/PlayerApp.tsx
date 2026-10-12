@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { MOTTO_MAX, NAME_MAX, SPIN_MS, FINAL_REVEAL_MS, teamDisplayName, type PlayerView } from "../../../shared/types";
+import { MOTTO_MAX, NAME_MAX, SPIN_MS, FINAL_REVEAL_MS, teamDisplayName, type PlayerView, type PublicPlayer } from "../../../shared/types";
 import { storage, useRoom, useTicker } from "../net";
-import { AvatarPicker, ConnectionBanner, formatClock, playerMap, TeamCard, teamStyle, Wordmark } from "../ui";
+import { prepareSelfie, uploadSelfie } from "../photo";
+import { Avatar, AvatarPicker, ConnectionBanner, EventCodeContext, formatClock, playerMap, TeamCard, teamStyle, Wordmark } from "../ui";
 
 export function PlayerApp({ code }: { code: string }) {
   const tokenStore = useMemo(() => storage(`fm.player.${code}`), [code]);
@@ -34,16 +35,23 @@ export function PlayerApp({ code }: { code: string }) {
   }
 
   return (
-    <Shell>
-      <ConnectionBanner status={status} />
-      {!view.me ? (
-        <Join view={view} send={send} />
-      ) : view.me.status === "pending" ? (
-        <Waiting title={`Hi ${view.me.name} ${view.me.emoji}`} body="The host will let you in shortly. Keep this page open." />
-      ) : (
-        <InGame view={view} send={send} serverNow={serverNow} />
-      )}
-    </Shell>
+    <EventCodeContext.Provider value={code}>
+      <Shell>
+        <ConnectionBanner status={status} />
+        {!view.me ? (
+          <Join view={view} send={send} />
+        ) : view.me.status === "pending" ? (
+          <>
+            <Waiting title={`Hi ${view.me.name} ${view.me.emoji}`} body="The host will let you in shortly. Keep this page open." />
+            <section className="phone__card">
+              <PhotoStep me={view.me} getToken={tokenStore.get} send={send} />
+            </section>
+          </>
+        ) : (
+          <InGame view={view} send={send} serverNow={serverNow} getToken={tokenStore.get} code={code} />
+        )}
+      </Shell>
+    </EventCodeContext.Provider>
   );
 }
 
@@ -212,8 +220,40 @@ function Join({ view, send }: { view: PlayerView; send: Send }) {
 // ---------------------------------------------------------------------------
 // In the game
 
-function InGame({ view, send, serverNow }: { view: PlayerView; send: Send; serverNow: () => number }) {
+interface InGameProps {
+  view: PlayerView;
+  send: Send;
+  serverNow: () => number;
+  getToken: () => string | null;
+  code: string;
+}
+
+function InGame({ view, send, serverNow, getToken, code }: InGameProps) {
   const me = view.me!;
+  // Guests are asked for a photo straight after joining; "Skip for now" is remembered.
+  const skipStore = useMemo(() => storage(`fm.photoSkipped.${code}`), [code]);
+  const [skipped, setSkipped] = useState(() => skipStore.get() === "1");
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const photoPanel = (intro: boolean) => (
+    <section className="phone__card">
+      <PhotoStep
+        me={me}
+        getToken={getToken}
+        send={send}
+        intro={intro}
+        onDone={() => {
+          skipStore.set("1");
+          setSkipped(true);
+          setPhotoOpen(false);
+        }}
+      />
+    </section>
+  );
+  const photoButton = (
+    <button className="btn btn--ghost btn--small photo-link" onClick={() => setPhotoOpen(true)}>
+      {me.photo ? "Change your photo" : "Add your photo"}
+    </button>
+  );
   const players = useMemo(() => playerMap(view.players), [view.players]);
 
   // Phones wait for the wheel on the TV to stop before showing a result.
@@ -226,7 +266,7 @@ function InGame({ view, send, serverNow }: { view: PlayerView; send: Send; serve
     const ev = view.draw.lastEvent;
     if (lastStep.current !== null && step === lastStep.current + 1 && ev) {
       const involved = !prevTeamId.current || ev.playerIds.includes(me.id) || ev.teamId === prevTeamId.current;
-      if (involved) setHoldUntil(Date.now() + (ev.final ? FINAL_REVEAL_MS - 400 : SPIN_MS - 1900));
+      if (involved) setHoldUntil(Date.now() + (ev.final ? FINAL_REVEAL_MS - 400 : SPIN_MS - 3000));
     }
     lastStep.current = step;
     prevTeamId.current = me.teamId;
@@ -249,24 +289,26 @@ function InGame({ view, send, serverNow }: { view: PlayerView; send: Send; serve
   if (view.intermission) return <Waiting title="Short break" body="We'll be back in a moment." />;
 
   if (phase === "draft") {
+    if ((!me.photo && !skipped) || photoOpen) return photoPanel(!me.photo && !skipped);
     const joined = view.players.filter((p) => p.status === "joined");
     return (
       <section className="phone__card">
-        <h1 className="phone__title">
-          You're in, {me.name} {me.emoji}
-        </h1>
+        <h1 className="phone__title">You're in, {me.name}</h1>
         <p>The team draw starts soon. Keep this page open, and watch the TV.</p>
         <h2 className="phone__subtitle">{joined.length} here so far</h2>
         <ul className="chip-list">
           {joined.map((p) => (
             <li key={p.id} className="chip">
-              {p.emoji} {p.name}
+              <Avatar player={p} /> {p.name}
             </li>
           ))}
         </ul>
+        {photoButton}
       </section>
     );
   }
+
+  if (photoOpen) return photoPanel(false);
 
   if ((phase === "locked" || phase === "revealing") && hidden) {
     return <Waiting title="Eyes on the TV" body="Teams are being drawn. You'll see yours here when the draw is complete." />;
@@ -311,6 +353,7 @@ function InGame({ view, send, serverNow }: { view: PlayerView; send: Send; serve
       {stillToCome > 0 && partners.length > 0 && <p>One more teammate to come.</p>}
       {phase === "complete" && <Naming view={view} send={send} serverNow={serverNow} />}
       <TeamCard team={team} players={players} showSeats />
+      {photoButton}
     </section>
   );
 }
@@ -388,6 +431,113 @@ function Naming({ view, send, serverNow }: { view: PlayerView; send: Send; serve
           </button>
         </form>
       )}
+      <ErrorText error={error} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Guest photo
+
+function PhotoStep({
+  me,
+  getToken,
+  send,
+  intro = false,
+  onDone,
+}: {
+  me: PublicPlayer;
+  getToken: () => string | null;
+  send: Send;
+  intro?: boolean;
+  onDone?: () => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<{ blob: Blob; url: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => () => {
+    if (preview) URL.revokeObjectURL(preview.url);
+  }, [preview]);
+
+  const choose = async (file: File | undefined) => {
+    if (!file) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const blob = await prepareSelfie(file);
+      setPreview({ blob, url: URL.createObjectURL(blob) });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+      if (input.current) input.current.value = "";
+    }
+  };
+
+  const upload = async () => {
+    const token = getToken();
+    if (!preview || !token) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await uploadSelfie(preview.blob, token);
+      setPreview(null);
+      onDone?.();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="photo-step">
+      <h1 className="phone__title">{intro ? "Add your photo" : me.photo ? "Your photo" : "Add your photo"}</h1>
+      <p>It flashes up on the TV when you're drawn, and shows on your team card.</p>
+      {preview ? (
+        <img className="photo-step__preview avatar--photo" src={preview.url} alt="Your new photo" />
+      ) : (
+        <Avatar player={me} className="photo-step__preview" />
+      )}
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => choose(e.target.files?.[0])}
+      />
+      <div className="photo-step__actions">
+        {preview ? (
+          <>
+            <button className="btn btn--primary btn--block" disabled={busy} onClick={upload}>
+              {busy ? "Uploading…" : "Use this photo"}
+            </button>
+            <button className="btn btn--ghost btn--block" disabled={busy} onClick={() => input.current?.click()}>
+              Try a different photo
+            </button>
+          </>
+        ) : (
+          <button className="btn btn--primary btn--block" disabled={busy} onClick={() => input.current?.click()}>
+            {busy ? "Getting your photo ready…" : me.photo ? "Take or choose a new photo" : "Take a selfie or choose a photo"}
+          </button>
+        )}
+        {me.photo && !preview && (
+          <button
+            className="btn btn--ghost btn--block"
+            disabled={busy}
+            onClick={() => send("player.removePhoto").catch((e) => setError((e as Error).message))}
+          >
+            Remove my photo
+          </button>
+        )}
+        {onDone && (
+          <button className="btn btn--ghost btn--block" disabled={busy} onClick={onDone}>
+            {me.photo ? "Done" : intro ? "Skip for now" : "Not now"}
+          </button>
+        )}
+      </div>
       <ErrorText error={error} />
     </div>
   );

@@ -32,6 +32,8 @@ export interface ActionResult {
   alarmAt?: number | null;
   /** True when the request was valid but changed nothing (e.g. a duplicate spin). */
   noChange?: boolean;
+  /** Guests whose stored photos should be deleted. */
+  deletePhotos?: string[];
 }
 
 type Payload = Record<string, unknown>;
@@ -309,7 +311,7 @@ const host: Record<string, Handler> = {
     const pl = findPlayer(s, p.id);
     if (pl.teamId) throw new UserError(`${pl.name} is on a team. Mark them as gone instead.`);
     s.players = s.players.filter((x) => x.id !== pl.id);
-    return { audit: ["guest.remove", pl.name] };
+    return { audit: ["guest.remove", pl.name], deletePhotos: [pl.id] };
   },
 
   "guest.exclude": (s, _a, p) => {
@@ -346,7 +348,7 @@ const host: Record<string, Handler> = {
     const pl = findPlayer(s, p.id);
     if (pl.status !== "pending") throw new UserError(`${pl.name} isn't waiting for approval.`);
     s.players = s.players.filter((x) => x.id !== pl.id);
-    return { audit: ["guest.reject", pl.name] };
+    return { audit: ["guest.reject", pl.name], deletePhotos: [pl.id] };
   },
 
   "guest.release": (s, _a, p) => {
@@ -355,6 +357,13 @@ const host: Record<string, Handler> = {
     pl.token = null;
     if (pl.status === "joined" && !pl.teamId) pl.status = "expected";
     return { audit: ["guest.release", `${pl.name}'s phone unlinked`] };
+  },
+
+  "guest.removePhoto": (s, _a, p) => {
+    const pl = findPlayer(s, p.id);
+    if (!pl.photo) throw new UserError(`${pl.name} doesn't have a photo.`);
+    pl.photo = null;
+    return { audit: ["guest.removePhoto", `Removed ${pl.name}'s photo`], deletePhotos: [pl.id] };
   },
 
   "guest.rejoinCode": (s, _a, p, now) => {
@@ -504,6 +513,13 @@ const player: Record<string, Handler> = {
       pl.joinedAt = now;
     }
     return { welcome: { token: pl.token, playerId: pl.id }, audit: ["player.rejoin", `${pl.name} rejoined on a new phone`] };
+  },
+
+  "player.removePhoto": (s, actor) => {
+    if (!actor.playerId) throw new UserError("Join the event first.");
+    const me = findPlayer(s, actor.playerId);
+    me.photo = null;
+    return { deletePhotos: [me.id] };
   },
 
   "player.emoji": (s, actor, p) => {

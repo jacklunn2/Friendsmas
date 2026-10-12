@@ -1310,3 +1310,111 @@ textarea {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ------------------------------------------------------------ guest photos */
+
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+}
+.avatar--photo {
+  display: block;
+  object-fit: cover;
+  border-radius: 50%;
+  background: var(--spruce);
+}
+img.member__emoji {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--team) 70%, transparent);
+}
+.arrivals__guest {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+.arrivals__avatar {
+  width: 1.5em;
+  height: 1.5em;
+  margin: -0.2em 0 -0.2em -0.5em;
+}
+.chip .avatar,
+.row__name .avatar {
+  width: 1.6em;
+  height: 1.6em;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.draw__callout-photo {
+  width: 12vw;
+  height: 12vw;
+  margin: -7.5vw auto 0.6vw;
+  font-size: 6vw;
+  border-radius: 50%;
+  border: 0.45vw solid var(--team);
+  background: var(--pine-2);
+  box-shadow: 0 0 0 0.35vw var(--pine), 0 0 3vw color-mix(in srgb, var(--team) 60%, transparent);
+  animation: photo-flash 900ms ease-out;
+}
+@keyframes photo-flash {
+  0% {
+    transform: scale(0.3);
+    filter: brightness(3);
+    opacity: 0;
+  }
+  35% {
+    transform: scale(1.12);
+    filter: brightness(1.8);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+.final-reveal__photos {
+  display: flex;
+  justify-content: center;
+  gap: 1.4vw;
+}
+.final-reveal__photo {
+  width: 9vw;
+  height: 9vw;
+  font-size: 4.5vw;
+  border-radius: 50%;
+  border: 0.4vw solid var(--team);
+  background: var(--pine-2);
+  animation: photo-flash 900ms ease-out both;
+}
+.final-reveal__photo:nth-child(2) {
+  animation-delay: 150ms;
+}
+.final-reveal__photo:nth-child(3) {
+  animation-delay: 300ms;
+}
+
+.photo-step {
+  display: grid;
+  gap: 0.9rem;
+  justify-items: center;
+  text-align: center;
+}
+.photo-step__preview {
+  width: 11rem;
+  height: 11rem;
+  font-size: 5rem;
+  border-radius: 50%;
+  border: 4px solid var(--brass);
+  background: var(--pine);
+}
+.photo-step__actions {
+  display: grid;
+  gap: 0.5rem;
+  width: 100%;
+}
+.photo-link {
+  justify-self: center;
+}

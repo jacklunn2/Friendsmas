@@ -20,6 +20,8 @@ export interface ServerPlayer {
   rejoinCode: string | null;
   rejoinExpires: number | null;
   createdAt: number;
+  /** Photo version (bumped on each upload), or null. The image lives in the photos table. */
+  photo?: number | null;
 }
 
 export interface ServerTeam {

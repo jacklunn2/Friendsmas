@@ -21,6 +21,8 @@ export interface PublicPlayer {
   /** Only set once this player's team has been revealed to the viewer. */
   teamId: string | null;
   isTest: boolean;
+  /** Photo version, or null if the guest hasn't added a photo. See photoUrl(). */
+  photo: number | null;
 }
 
 export interface PublicTeam {
@@ -140,8 +142,8 @@ export interface ClientRequest {
 // ---------------------------------------------------------------------------
 // Constants shared by both sides
 
-export const SPIN_MS = 6500;
-export const FINAL_REVEAL_MS = 4200;
+export const SPIN_MS = 8000;
+export const FINAL_REVEAL_MS = 5600;
 export const NAMING_MS = 120_000;
 export const MOTTO_MAX = 60;
 export const NAME_MAX = 24;
@@ -163,6 +165,13 @@ export const AVATARS = [
   "🎄", "⭐", "🔔", "🎁", "🍪", "🥧", "🍤", "🍉",
   "🏖️", "🕶️", "🎸", "🎳", "🦄", "🐙", "🦖", "🌵",
 ] as const;
+
+export const PHOTO_SIZE = 360;
+export const PHOTO_MAX_BYTES = 300_000;
+
+export function photoUrl(p: { id: string; photo: number | null }, eventCode: string): string | null {
+  return p.photo ? `/api/photo/${p.id}?v=${p.photo}&c=${eventCode}` : null;
+}
 
 export function teamDisplayName(team: { name: string | null; order: number }): string {
   return team.name ?? `Team ${team.order + 1}`;

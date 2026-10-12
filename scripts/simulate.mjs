@@ -231,6 +231,29 @@ async function main() {
     console.log(`    ${t.badge} ${t.name}: ${members}${t.motto ? ` — “${t.motto}”` : ""}`);
   }
 
+  // --- Photos
+  const TINY_JPEG = Buffer.from("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHBwgHBgoICAgLCgoLDhgQDg0NDh0VFhEYIx8lJCIfIiEmKzcvJik0KSEiMEExNDk7Pj4+JS5ESUM8SDc9Pjv/2wBDAQoLCw4NDhwQEBw7KCIoOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozv/wAARCAAQABADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDMooorkPtj/9k=", "base64");
+  const upload = (token, body, type = "image/jpeg") =>
+    fetch(`${BASE}/api/photo`, {
+      method: "POST",
+      headers: { "content-type": type, ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      body,
+    });
+  check((await upload(null, TINY_JPEG)).status === 401, "a photo upload without a guest's link is refused");
+  const notPhoto = await upload(phones.Ben.welcome.token, Buffer.from("not a photo at all, just text padding".repeat(4)));
+  check(notPhoto.status === 415, `non-photos are refused (got ${notPhoto.status})`);
+  const up = await upload(phones.Ben.welcome.token, TINY_JPEG);
+  check(up.status === 200, "a guest uploads a photo");
+  const benId = host.view.roster.find((p) => p.name === "Ben").id;
+  const benOnStage = await stage.until((v) => v.players.find((p) => p.id === benId)?.photo);
+  const photoV = benOnStage.players.find((p) => p.id === benId).photo;
+  const okRes = await fetch(`${BASE}/api/photo/${benId}?v=${photoV}&c=${code}`);
+  check(okRes.status === 200 && okRes.headers.get("content-type") === "image/jpeg", "the stage can load the photo");
+  check((await fetch(`${BASE}/api/photo/${benId}?v=${photoV}&c=wrong`)).status === 404, "the photo needs the event link to load");
+  await host.req("guest.removePhoto", { id: benId });
+  await stage.until((v) => v.players.find((p) => p.id === benId)?.photo === null);
+  check((await fetch(`${BASE}/api/photo/${benId}?v=${photoV}&c=${code}`)).status === 404, "the host can remove a photo");
+
   // --- Phones and sessions
   const avaToken = phones.Ava.welcome.token;
   phones.Ava.close();

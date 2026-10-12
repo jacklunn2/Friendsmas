@@ -3,12 +3,12 @@ import QRCode from "qrcode";
 import { FINAL_REVEAL_MS, SPIN_MS, teamDisplayName, type RevealEventView, type StageView } from "../../../shared/types";
 import { audioOn, enableAudio, sfx } from "../audio";
 import { storage, useRoom, useTicker } from "../net";
-import { ConnectionBanner, formatClock, playerMap, TeamCard, teamStyle, Wordmark } from "../ui";
+import { Avatar, ConnectionBanner, EventCodeContext, formatClock, playerMap, TeamCard, teamStyle, Wordmark } from "../ui";
 import { Wheel } from "./Wheel";
 
 // Timing of one reveal inside the server's spin cooldown.
-const WHEEL_MS = SPIN_MS - 1900;
-const CELEBRATE_MS = 1300;
+const CELEBRATE_MS = 2600;
+const WHEEL_MS = SPIN_MS - CELEBRATE_MS - 600;
 const FINAL_MS = FINAL_REVEAL_MS - 400;
 
 type Anim =
@@ -137,6 +137,7 @@ export function StageApp({ code }: { code: string }) {
   }
 
   return (
+    <EventCodeContext.Provider value={shown.eventCode}>
     <main className="stage">
       <ConnectionBanner status={status} />
       {!started && (
@@ -150,6 +151,7 @@ export function StageApp({ code }: { code: string }) {
         setAnim((a) => (a && a.kind === "spin" ? { ...a, phase: "landed" } : a));
       }} />
     </main>
+    </EventCodeContext.Provider>
   );
 }
 
@@ -205,7 +207,7 @@ function Arrivals({ view }: { view: StageView }) {
         <ul className="arrivals__list">
           {joined.map((p) => (
             <li key={p.id} className="arrivals__guest">
-              <span aria-hidden>{p.emoji}</span> {p.name}
+              <Avatar player={p} className="arrivals__avatar" /> {p.name}
             </li>
           ))}
           {expected.map((p) => (
@@ -245,9 +247,8 @@ function Draw({ view, anim, onLanded, onSpin }: { view: StageView; anim: Anim | 
         />
         {landed && winner && winnerTeam && (
           <div className="draw__callout" style={teamStyle(winnerTeam)}>
-            <span className="draw__callout-name">
-              {winner.emoji} {winner.name}
-            </span>
+            <Avatar player={winner} className="draw__callout-photo" />
+            <span className="draw__callout-name">{winner.name}</span>
             <span className="draw__callout-team">
               joins {winnerTeam.badge} {teamDisplayName(winnerTeam)}
             </span>
@@ -282,7 +283,7 @@ function FinalReveal({
 }) {
   const [named, setNamed] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setNamed(true), FINAL_MS - 1500);
+    const t = setTimeout(() => setNamed(true), FINAL_MS - 2600);
     return () => clearTimeout(t);
   }, []);
   const names = event.playerIds.map((id) => players.get(id)).filter(Boolean);
@@ -292,9 +293,12 @@ function FinalReveal({
         <p className="final-reveal__suspense">…which means</p>
       ) : (
         <>
-          <p className="final-reveal__names">
-            {names.map((p) => `${p!.emoji} ${p!.name}`).join(names.length > 2 ? ", " : " & ")}
-          </p>
+          <div className="final-reveal__photos">
+            {names.map((p) => (
+              <Avatar key={p!.id} player={p!} className="final-reveal__photo" />
+            ))}
+          </div>
+          <p className="final-reveal__names">{names.map((p) => p!.name).join(names.length > 2 ? ", " : " & ")}</p>
           <p className="final-reveal__team">
             are {badge} {teamName}
           </p>
