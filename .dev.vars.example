@@ -1,0 +1,3 @@
+# Copy this file to .dev.vars for local development.
+# In production, set HOST_PASSWORD as a secret in the Cloudflare dashboard.
+HOST_PASSWORD=change-me

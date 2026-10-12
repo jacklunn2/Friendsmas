@@ -1,0 +1,62 @@
+# Friendsmas
+
+A private, full-day Christmas game show for 10–12 friends: a host control room on a laptop, a stage on the TV, and every guest playing on their phone.
+
+The full product spec lives in the [Friendsmas Product Spec](https://claude.ai/code/artifact/00fe1706-0d45-4ff4-92a7-3ea455094363).
+
+## What's built so far
+
+**Block 1: joining, guest list, team draw and team identities**
+
+- **Joining.** Guests open the private link (or scan the QR code on the TV), tap their name and pick an avatar. Unexpected guests can join with a nickname, and the host lets them in. Phones are remembered, and a 4-digit rejoin code moves a guest to a new phone.
+- **Team draw.** The host locks the draw, and the server shuffles everyone into teams with a cryptographically secure random function and saves the result. The wheel on the TV only reveals what was saved, one name per spin, with the last team completed in a final "…which means" moment. Double clicks, a second tab or a refresh can't reroll anything.
+- **Odd numbers.** With an odd number of guests, the host must choose between a team of three and a solo player before locking.
+- **Reveal modes.** In live mode, each phone buzzes when its owner is drawn. In grand-finale mode, phones wait until every team is drawn.
+- **Team identities.** Each team gets a colour and badge, then picks one of three suggested names on their phones within two minutes, with one reroll. The host can edit any name, motto, colour or badge.
+- **After the draw.** The host can add late arrivals to a team (or let the app choose one of the smallest teams), move players, mark someone as gone home, or reset the draw with a typed confirmation.
+- **Control room.** One big button always does the next step. There's an intermission switch for the TV, and an activity log records every change.
+- **Rehearsal.** "Add 6 test guests" fills the guest list for a practice run.
+
+## Screens
+
+| Address | Who uses it |
+| --- | --- |
+| `/host` | You, on the laptop (needs the host password) |
+| `/stage?c=<event code>` | The TV. Open it with **Launch stage** in the control room |
+| `/e/<event code>` | Guests' phones. Use **Copy guest link** in the control room |
+
+## How it works
+
+- `worker/` is the server: a Cloudflare Worker with one Durable Object (`EventRoom`) that holds the whole event. It handles one action at a time, so nothing can collide.
+- `worker/logic.ts` holds every game rule as plain functions. `worker/views.ts` decides what each screen may see; unrevealed draw results never leave the server.
+- `client/` is the React app for all three screens. `shared/types.ts` is shared by both sides.
+- Sound is synthesised in the browser and only plays on the stage.
+
+## Deploying to Cloudflare (one-time setup)
+
+1. In the [Cloudflare dashboard](https://dash.cloudflare.com), go to **Workers & Pages → Create → Import a repository**, connect GitHub and choose `jacklunn2/friendsmas`.
+2. Use these build settings:
+   - Build command: `npm run build`
+   - Deploy command: `npx wrangler deploy`
+3. After the first deploy, open the Worker's **Settings → Variables and Secrets**, add a **Secret** called `HOST_PASSWORD` with a password of your choice, and redeploy.
+4. Visit `https://friendsmas.<your-subdomain>.workers.dev/host` and sign in.
+
+From then on, every push to `main` deploys automatically.
+
+## Developing locally
+
+```bash
+npm install
+cp .dev.vars.example .dev.vars   # then set a local HOST_PASSWORD
+npm run dev                      # http://localhost:5173/host
+```
+
+Checks:
+
+```bash
+npm test                                             # game-rule tests
+npm run typecheck
+node scripts/simulate.mjs http://localhost:5173 <password>   # full rehearsal: host, stage and 12 phones
+```
+
+The rehearsal script resets the local event, so only run it against your local server, never the live one.
