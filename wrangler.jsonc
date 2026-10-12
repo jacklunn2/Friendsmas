@@ -13,5 +13,7 @@
     "bindings": [{ "name": "ROOM", "class_name": "EventRoom" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["EventRoom"] }],
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  // Keep variables added in the Cloudflare dashboard when GitHub deploys.
+  "keep_vars": true
 }
