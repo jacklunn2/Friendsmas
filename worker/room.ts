@@ -96,8 +96,10 @@ export class EventRoom extends DurableObject<Env> {
       if (this.state.hostTokens.some((t) => t.token === token)) attachment = { role: "host", playerId: null, token };
       else refusal = "Sign in again to open the control room.";
     } else if (role === "stage") {
-      if (code === this.state.eventCode || this.state.hostTokens.some((t) => t.token === token)) {
-        attachment = { role: "stage", playerId: null, token: null };
+      // A stage opened on the host's signed-in laptop may also spin the wheel.
+      const isHost = !!token && this.state.hostTokens.some((t) => t.token === token);
+      if (code === this.state.eventCode || isHost) {
+        attachment = { role: "stage", playerId: null, token: isHost ? token : null };
       } else refusal = "Open the stage from the control room.";
     } else if (role === "player") {
       if (code === this.state.eventCode) {
@@ -136,7 +138,14 @@ export class EventRoom extends DurableObject<Env> {
       return;
     }
 
-    const actor: Actor = { role: att.role, playerId: att.playerId };
+    // The stage can only ever spin the wheel, and only on the host's laptop.
+    if (att.role === "stage") {
+      if (req.a !== "draw.spin" || !att.token) {
+        ws.send(json({ type: "error", rid: req.rid, message: "Use the control room for that." }));
+        return;
+      }
+    }
+    const actor: Actor = { role: att.role === "stage" ? "host" : att.role, playerId: att.playerId };
     const now = Date.now();
     // Work on a copy so a failed action can never leave half-applied changes.
     const draft = structuredClone(this.state);
@@ -206,6 +215,11 @@ export class EventRoom extends DurableObject<Env> {
       ws.close(4001, "unauthorized");
       return null;
     }
+    if (att.role === "stage" && att.token && !this.state.hostTokens.some((t) => t.token === att.token)) {
+      const plain: Attachment = { role: "stage", playerId: null, token: null };
+      ws.serializeAttachment(plain);
+      return plain;
+    }
     if (att.role === "player" && att.playerId) {
       const me = this.state.players.find((p) => p.id === att.playerId);
       if (!me || !me.token || me.token !== att.token) {
@@ -220,7 +234,7 @@ export class EventRoom extends DurableObject<Env> {
   private viewFor(att: Attachment) {
     const now = Date.now();
     if (att.role === "host") return hostView(this.state, this.recentAudit(), now);
-    if (att.role === "stage") return stageView(this.state, now);
+    if (att.role === "stage") return stageView(this.state, now, !!att.token);
     return playerView(this.state, att.playerId, now);
   }
 
@@ -228,12 +242,15 @@ export class EventRoom extends DurableObject<Env> {
     const audit = this.recentAudit();
     const now = Date.now();
     const stage = json({ type: "state", view: stageView(this.state, now) });
+    let stageWithSpin: string | null = null;
     let host: string | null = null;
     for (const ws of this.ctx.getWebSockets()) {
       const att = this.checkedAttachment(ws);
       if (!att) continue;
       try {
-        if (att.role === "stage") ws.send(stage);
+        if (att.role === "stage") {
+          ws.send(att.token ? (stageWithSpin ??= json({ type: "state", view: stageView(this.state, now, true) })) : stage);
+        }
         else if (att.role === "host") ws.send((host ??= json({ type: "state", view: hostView(this.state, audit, now) })));
         else ws.send(json({ type: "state", view: playerView(this.state, att.playerId, now) }));
       } catch {

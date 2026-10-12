@@ -91,6 +91,8 @@ export interface PlayerView extends PublicView {
 
 export interface StageView extends PublicView {
   role: "stage";
+  /** True when this stage was opened from a signed-in control room, so clicking the wheel spins it. */
+  canSpin: boolean;
 }
 
 export interface HostPlayer extends PublicPlayer {

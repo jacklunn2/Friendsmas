@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { FINAL_REVEAL_MS, SPIN_MS, teamDisplayName, type RevealEventView, type StageView } from "../../../shared/types";
 import { audioOn, enableAudio, sfx } from "../audio";
-import { useRoom, useTicker } from "../net";
+import { storage, useRoom, useTicker } from "../net";
 import { ConnectionBanner, formatClock, playerMap, TeamCard, teamStyle, Wordmark } from "../ui";
 import { Wheel } from "./Wheel";
 
@@ -16,7 +16,10 @@ type Anim =
   | { kind: "final"; event: RevealEventView };
 
 export function StageApp({ code }: { code: string }) {
-  const { view, status, unauthorized, serverNow } = useRoom<StageView>({ role: "stage", code });
+  // On the host's laptop the control-room sign-in is shared, which lets
+  // the wheel itself be clicked to spin. Guests' browsers don't have it.
+  const getToken = useCallback(() => storage("fm.hostToken").get(), []);
+  const { view, status, unauthorized, serverNow, send } = useRoom<StageView>({ role: "stage", code, getToken });
   const [started, setStarted] = useState(false);
 
   // The stage plays each reveal before showing the new state, so the TV
@@ -83,6 +86,28 @@ export function StageApp({ code }: { code: string }) {
     prevJoined.current = joinedCount;
   }, [joinedCount]);
 
+  const canSpinNow =
+    !!shown?.canSpin && !anim && (shown.draw.phase === "locked" || shown.draw.phase === "revealing") && !shown.intermission;
+  const spinNow = useCallback(() => {
+    const step = latest.current?.draw.step;
+    if (step === undefined) return;
+    send("draw.spin", { expectedStep: step }).catch(() => {});
+  }, [send]);
+
+  // A presentation clicker or the keyboard can spin too.
+  useEffect(() => {
+    if (!canSpinNow || !started) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat) return;
+      if (e.key === " " || e.key === "Enter" || e.key === "ArrowRight" || e.key === "PageDown") {
+        e.preventDefault();
+        spinNow();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [canSpinNow, started, spinNow]);
+
   const start = async () => {
     await enableAudio();
     try {
@@ -120,7 +145,7 @@ export function StageApp({ code }: { code: string }) {
           <span className="stage-start__hint">Turns on sound and goes full screen. Do this once, before guests arrive.</span>
         </button>
       )}
-      <StageScene view={shown} anim={anim} serverNow={serverNow} onLanded={() => {
+      <StageScene view={shown} anim={anim} serverNow={serverNow} onSpin={canSpinNow ? spinNow : undefined} onLanded={() => {
         if (audioOn()) sfx.fanfare();
         setAnim((a) => (a && a.kind === "spin" ? { ...a, phase: "landed" } : a));
       }} />
@@ -129,18 +154,19 @@ export function StageApp({ code }: { code: string }) {
 }
 
 interface SceneProps {
+  onSpin?: () => void;
   view: StageView;
   anim: Anim | null;
   serverNow: () => number;
   onLanded: () => void;
 }
 
-function StageScene({ view, anim, serverNow, onLanded }: SceneProps) {
+function StageScene({ view, anim, serverNow, onLanded, onSpin }: SceneProps) {
   if (view.intermission) return <Intermission />;
   const { phase } = view.draw;
   if (phase === "draft") return <Arrivals view={view} />;
   if (phase === "complete" && !anim) return <Teams view={view} serverNow={serverNow} />;
-  return <Draw view={view} anim={anim} onLanded={onLanded} />;
+  return <Draw view={view} anim={anim} onLanded={onLanded} onSpin={onSpin} />;
 }
 
 function Intermission() {
@@ -193,7 +219,7 @@ function Arrivals({ view }: { view: StageView }) {
   );
 }
 
-function Draw({ view, anim, onLanded }: { view: StageView; anim: Anim | null; onLanded: () => void }) {
+function Draw({ view, anim, onLanded, onSpin }: { view: StageView; anim: Anim | null; onLanded: () => void; onSpin?: () => void }) {
   const players = useMemo(() => playerMap(view.players), [view.players]);
   const wheelNames = view.draw.pool.map((id) => {
     const p = players.get(id);
@@ -215,6 +241,7 @@ function Draw({ view, anim, onLanded }: { view: StageView; anim: Anim | null; on
           winnerId={landed ? spinTarget : null}
           onTick={() => audioOn() && sfx.tick()}
           onLanded={onLanded}
+          onHubClick={onSpin}
         />
         {landed && winner && winnerTeam && (
           <div className="draw__callout" style={teamStyle(winnerTeam)}>

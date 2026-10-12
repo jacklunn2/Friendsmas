@@ -87,8 +87,8 @@ function base(s: ServerState, viewer: Viewer, now: number): PublicView {
   };
 }
 
-export function stageView(s: ServerState, now: number): StageView {
-  return { ...base(s, { role: "stage" }, now), role: "stage" };
+export function stageView(s: ServerState, now: number, canSpin = false): StageView {
+  return { ...base(s, { role: "stage" }, now), role: "stage", canSpin };
 }
 
 export function playerView(s: ServerState, playerId: string | null, now: number): PlayerView {

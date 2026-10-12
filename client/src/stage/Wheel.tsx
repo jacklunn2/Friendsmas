@@ -14,6 +14,8 @@ interface Props {
   winnerId: string | null;
   onTick?: () => void;
   onLanded?: () => void;
+  /** When set, the tree in the centre is a button that spins the wheel. */
+  onHubClick?: () => void;
 }
 
 const R = 228; // wheel radius
@@ -41,7 +43,7 @@ function segmentPath(start: number, end: number) {
  * The marquee wheel. It never decides anything: it is told which name to
  * land on, and choreographs a spin that ends there.
  */
-export function Wheel({ names, spin, durationMs, winnerId, onTick, onLanded }: Props) {
+export function Wheel({ names, spin, durationMs, winnerId, onTick, onLanded, onHubClick }: Props) {
   const groupRef = useRef<SVGGElement>(null);
   const rotation = useRef(0);
   const [spinning, setSpinning] = useState(false);
@@ -162,10 +164,24 @@ export function Wheel({ names, spin, durationMs, winnerId, onTick, onLanded }: P
           })}
         </g>
         <circle r={R} className="wheel__edge" />
-        <circle r={50} className="wheel__hub" />
-        <text y={17} textAnchor="middle" fontSize={44} aria-hidden>
-          🎄
-        </text>
+        <g
+          className={`wheel__hub-group${onHubClick && !spinning ? " is-ready" : ""}`}
+          role={onHubClick ? "button" : undefined}
+          tabIndex={onHubClick ? 0 : undefined}
+          aria-label={onHubClick ? "Spin the wheel" : undefined}
+          onClick={() => !spinning && onHubClick?.()}
+          onKeyDown={(e) => {
+            if ((e.key === "Enter" || e.key === " ") && !spinning) {
+              e.preventDefault();
+              onHubClick?.();
+            }
+          }}
+        >
+          <circle r={50} className="wheel__hub" />
+          <text y={17} textAnchor="middle" fontSize={44} aria-hidden>
+            🎄
+          </text>
+        </g>
         <path d={`M-22 ${-RIM - 30} L22 ${-RIM - 30} L0 ${-R + 14} Z`} className="wheel__pointer" />
       </svg>
     </div>

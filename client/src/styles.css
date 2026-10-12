@@ -530,6 +530,24 @@ textarea {
   stroke: var(--brass);
   stroke-width: 6;
 }
+.wheel__hub-group {
+  outline: none;
+}
+.wheel__hub-group[role="button"] {
+  cursor: pointer;
+}
+.wheel__hub-group.is-ready .wheel__hub {
+  animation: hub-ready 1.6s ease-in-out infinite;
+}
+.wheel__hub-group:focus-visible .wheel__hub {
+  stroke: var(--frost);
+}
+@keyframes hub-ready {
+  50% {
+    stroke-width: 12;
+    stroke: #ffd77a;
+  }
+}
 .wheel__pointer {
   fill: var(--snow);
   stroke: var(--brass);
