@@ -290,3 +290,11 @@ export function formatPoints(n: number): string {
 export function signed(n: number): string {
   return n > 0 ? `+${n}` : n < 0 ? `\u2212${Math.abs(n)}` : "0";
 }
+
+/** How an activity is scored, in words, e.g. "1st: 5 points · 2nd: 3 points". */
+export function scoringSummary(a: Pick<ActivityView, "scoring" | "placements" | "perCorrect">): string {
+  const pts = (n: number) => `${n} ${n === 1 ? "point" : "points"}`;
+  if (a.scoring === "placement") return a.placements.map((p, i) => `${ordinal(i + 1)}: ${pts(p)}`).join(" · ");
+  if (a.scoring === "perCorrect") return `${pts(a.perCorrect)} for every correct answer`;
+  return "Points at the host's discretion";
+}

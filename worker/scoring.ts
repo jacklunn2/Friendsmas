@@ -29,7 +29,7 @@ import {
 } from "./common";
 import { newId, type Activity, type LedgerEntry, type ServerState, type Snapshot } from "./state";
 
-const DESCRIPTION_MAX = 400;
+const DESCRIPTION_MAX = 1000;
 const MAX_TIMER_SECONDS = 60 * 60;
 
 // ---------------------------------------------------------------------------
@@ -125,7 +125,7 @@ function activityFields(p: Payload) {
   }
   const perCorrect = p.perCorrect === undefined ? 1 : int(p, "perCorrect", { min: 1, max: MAX_POINTS, label: "points per correct answer" });
   const timerSeconds = p.timerSeconds === undefined ? 0 : int(p, "timerSeconds", { min: 0, max: MAX_TIMER_SECONDS, label: "the timer" });
-  const description = text(p, "description", DESCRIPTION_MAX, "the description");
+  const description = text(p, "description", DESCRIPTION_MAX, "the instructions");
   return { name, kind, scoring, placements, perCorrect, timerSeconds, description };
 }
 

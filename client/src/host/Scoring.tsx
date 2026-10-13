@@ -676,8 +676,16 @@ function ActivityForm({ run, activity, onDone }: { run: Run; activity?: Activity
         </label>
       )}
       <label className="field">
-        <span className="field__label">Instructions for the TV (optional)</span>
-        <textarea className="input input--area" rows={3} maxLength={400} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Act out a Christmas film. No talking, no pointing at objects." />
+        <span className="field__label">Instructions for players' phones (optional)</span>
+        <textarea
+          className="input input--area"
+          rows={5}
+          maxLength={1000}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder={"One of you acts out a Christmas film; the other guesses.\nNo talking, no props.\n60 seconds per film."}
+        />
+        <span className="host__muted">The TV shows only the game's name. Players see these on their phones when you show the game on the TV.</span>
       </label>
       <label className="field field--inline">
         <span className="field__label">Timer in seconds (optional)</span>

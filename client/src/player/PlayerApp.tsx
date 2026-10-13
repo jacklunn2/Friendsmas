@@ -6,6 +6,7 @@ import {
   SPIN_MS,
   formatPoints,
   placeLabel,
+  scoringSummary,
   teamDisplayName,
   type PlayerView,
   type PublicPlayer,
@@ -355,6 +356,7 @@ function InGame({ view, send, serverNow, getToken, code }: InGameProps) {
 
   return (
     <section className="phone__team" style={teamStyle(team)}>
+      {phase === "complete" && <NowPlaying view={view} serverNow={serverNow} />}
       <p className="phone__kicker">
         {team.badge} You're on {teamDisplayName(team)}
       </p>
@@ -362,7 +364,6 @@ function InGame({ view, send, serverNow, getToken, code }: InGameProps) {
         {partners.length ? `With ${partners.map((p) => p.name).join(" and ")}` : "Your partner is still on the wheel…"}
       </h1>
       {stillToCome > 0 && partners.length > 0 && <p>One more teammate to come.</p>}
-      {phase === "complete" && <NowPlaying view={view} serverNow={serverNow} />}
       {phase === "complete" && <Naming view={view} send={send} serverNow={serverNow} />}
       {phase === "complete" && <MyStandings view={view} serverNow={serverNow} />}
       <TeamCard team={team} players={players} showSeats />
@@ -376,17 +377,43 @@ function NowPlaying({ view, serverNow }: { view: PlayerView; serverNow: () => nu
   const a = view.stage.screen === "activity" ? view.activities.find((x) => x.id === view.stage.activityId) : undefined;
   const timer = view.stage.timer;
   useTicker(500, !!timer?.endsAt);
+
+  // A short buzz when a new game starts, so guests look at their phones.
+  const lastId = useRef<string | null>(null);
+  useEffect(() => {
+    if (a && a.id !== lastId.current) navigator.vibrate?.(150);
+    lastId.current = a?.id ?? null;
+  }, [a]);
+
   if (!a) return null;
+  const me = view.me!;
+  const partners = (view.myTeam?.memberIds ?? []).filter((id) => id !== me.id).map((id) => view.players.find((p) => p.id === id)?.name).filter(Boolean);
   const left = timer ? (timer.endsAt ? timer.endsAt - serverNow() : (timer.remainingMs ?? timer.durationMs)) : null;
   return (
-    <div className="now-playing">
+    <article className="now-playing" aria-labelledby="now-playing-name">
       <div className="now-playing__head">
-        <span className="phone__muted">Now playing</span>
+        <span className="now-playing__kicker">Now playing</span>
         {left !== null && <span className="naming__clock">{left > 0 ? formatClock(left) : "Time's up"}</span>}
       </div>
-      <h2 className="now-playing__name">{a.name}</h2>
-      {a.description && <p className="now-playing__desc">{a.description}</p>}
-    </div>
+      <h2 id="now-playing-name" className="now-playing__name">
+        {a.name}
+      </h2>
+      <p className="now-playing__who">
+        {a.kind === "team"
+          ? partners.length
+            ? `Team game: you play with ${partners.join(" and ")}`
+            : "Team game"
+          : "Individual game: you play on your own, for your team"}
+      </p>
+      {a.description ? (
+        <div className="now-playing__desc">{a.description}</div>
+      ) : (
+        <p className="phone__muted">The host will explain how to play.</p>
+      )}
+      <p className="now-playing__scoring">
+        <span className="phone__muted">Scoring:</span> {scoringSummary(a)}
+      </p>
+    </article>
   );
 }
 

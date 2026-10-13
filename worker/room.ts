@@ -230,11 +230,12 @@ export class EventRoom extends DurableObject<Env> {
           playerId: result.welcome.playerId,
           token: result.welcome.token,
         } satisfies Attachment);
-        ws.send(json({ type: "welcome", rid: req.rid, ...result.welcome }));
-      } else {
-        ws.send(json({ type: "ok", rid: req.rid, data: result.data }));
       }
+      // Send the new state first, so by the time a screen hears "done",
+      // it already shows the result of its action.
       this.broadcast();
+      if (result.welcome) ws.send(json({ type: "welcome", rid: req.rid, ...result.welcome }));
+      else ws.send(json({ type: "ok", rid: req.rid, data: result.data }));
     } catch (err) {
       const message = err instanceof UserError ? err.message : "Something went wrong on the server. Try again.";
       if (!(err instanceof UserError)) console.error("Action failed", req.a, err);

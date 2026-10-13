@@ -2272,3 +2272,39 @@ img.member__emoji {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
 }
+
+/* Game instructions: name on the TV, details on phones */
+.activity-intro__hint {
+  margin: 1.5vw 0 0;
+  font-size: 1.9vw;
+  color: var(--mist);
+}
+.now-playing {
+  border: 2px solid var(--brass);
+  box-shadow: 0 0 0 4px rgba(242, 181, 68, 0.12);
+  gap: 0.6rem;
+}
+.now-playing__kicker {
+  font-weight: 700;
+  color: var(--brass);
+}
+.now-playing__name {
+  font-size: 1.9rem;
+}
+.now-playing__who {
+  margin: 0;
+  font-weight: 700;
+  color: var(--frost);
+}
+.now-playing__desc {
+  white-space: pre-line;
+  font-size: 1.08rem;
+  line-height: 1.55;
+  padding: 0.75rem 0.9rem;
+  border-radius: 12px;
+  background: var(--pine);
+}
+.now-playing__scoring {
+  margin: 0;
+  font-size: 0.95rem;
+}

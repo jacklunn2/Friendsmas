@@ -7,7 +7,6 @@ import {
   placeLabel,
   signed,
   teamDisplayName,
-  type ActivityView,
   type PublicPlayer,
   type PublicTeam,
   type StageView,
@@ -52,22 +51,17 @@ export function ActivityIntro({ view, serverNow }: { view: StageView; serverNow:
     <section className="scene activity-intro">
       <p className="activity-intro__kind">{a.kind === "team" ? "Team challenge" : "Every player for their team"}</p>
       <h1 className="activity-intro__name">{a.name}</h1>
-      {a.description && <p className="activity-intro__desc">{a.description}</p>}
-      <p className="activity-intro__scoring">{scoringLine(a)}</p>
+      {!timer && <p className="activity-intro__hint">📱 Instructions are on your phones</p>}
       {timer && (
         <p className={`activity-intro__timer${done ? " is-done" : left <= 10_000 && running ? " is-low" : ""}`} aria-live="off">
           {done ? "Time's up!" : formatClock(left)}
         </p>
       )}
+      {timer && <p className="activity-intro__hint">📱 Instructions are on your phones</p>}
     </section>
   );
 }
 
-function scoringLine(a: ActivityView): string {
-  if (a.scoring === "placement") return a.placements.map((p, i) => `${ordinal(i + 1)}: ${p} ${p === 1 ? "point" : "points"}`).join("   ·   ");
-  if (a.scoring === "perCorrect") return `${a.perCorrect} ${a.perCorrect === 1 ? "point" : "points"} for every correct answer`;
-  return "Points at the host's discretion";
-}
 
 // ---------------------------------------------------------------------------
 // Activity results
