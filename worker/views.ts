@@ -15,6 +15,7 @@ import type {
   StageView,
 } from "../shared/types";
 import { revealedIds, spinCooldownUntil } from "./logic";
+import { hostQuizAnswers, myQuizAnswer, questionView, quizView } from "./quiz";
 import { liveEntries, rank, standingsStale, standingsView, totalsFrom } from "./scoring";
 import type { Activity, ServerPlayer, ServerState } from "./state";
 
@@ -100,6 +101,7 @@ function base(s: ServerState, viewer: Viewer, now: number): PublicView {
     standings: standingsView(s),
     blackout: s.blackout,
     results: resultsView(s),
+    quiz: quizView(s, true),
   };
 }
 
@@ -107,6 +109,10 @@ function activityView(a: Activity): ActivityView {
   return {
     id: a.id,
     name: a.name,
+    format: a.format ?? "live",
+    speedBonus: a.speedBonus ?? 0,
+    questionSeconds: a.questionSeconds ?? 30,
+    questionCount: a.questions?.length ?? 0,
     kind: a.kind,
     scoring: a.scoring,
     placements: a.placements,
@@ -153,6 +159,7 @@ export function playerView(s: ServerState, playerId: string | null, now: number)
     role: "player",
     me,
     myPoints: raw ? (s.snapshots.at(-1)?.players[raw.id] ?? 0) : 0,
+    myQuizAnswer: myQuizAnswer(s, raw?.id ?? null),
     myTeam:
       myTeamPublic && myTeamRaw
         ? { ...myTeamPublic, suggestions: myTeamRaw.suggestions, rerollUsed: myTeamRaw.rerollUsed }
@@ -195,10 +202,18 @@ export function hostView(s: ServerState, audit: AuditEntry[], now: number): Host
         reason: e.reason,
         kind: e.kind,
         placement: e.placement,
+        questionId: e.questionId ?? null,
         voided: e.voided,
         revealed: e.revealed,
       })),
     liveTotals: totalsFrom(s, liveEntries(s)).teams,
     standingsStale: standingsStale(s),
+    questions: Object.fromEntries(s.activities.filter((a) => a.format === "quiz").map((a) => [a.id, (a.questions ?? []).map(questionView)])),
+    quizAnswers: hostQuizAnswers(s),
+    revealedQuestions: Object.fromEntries(
+      s.activities
+        .filter((a) => a.format === "quiz")
+        .map((a) => [a.id, (a.questions ?? []).filter((q) => s.quiz.revealed.includes(q.id)).map((q) => q.id)]),
+    ),
   };
 }

@@ -12,6 +12,7 @@ import {
   type PublicPlayer,
 } from "../../../shared/types";
 import { revealDurationMs } from "../timing";
+import { PhoneQuiz } from "./PhoneQuiz";
 import { storage, useRoom, useTicker } from "../net";
 import { prepareSelfie, uploadSelfie } from "../photo";
 import { Avatar, AvatarPicker, ConnectionBanner, EventCodeContext, formatClock, playerMap, TeamCard, teamStyle, Wordmark } from "../ui";
@@ -357,6 +358,7 @@ function InGame({ view, send, serverNow, getToken, code }: InGameProps) {
   return (
     <section className="phone__team" style={teamStyle(team)}>
       {phase === "complete" && <NowPlaying view={view} serverNow={serverNow} />}
+      {phase === "complete" && view.stage.screen === "quiz" && <PhoneQuiz view={view} send={send} serverNow={serverNow} />}
       <p className="phone__kicker">
         {team.badge} You're on {teamDisplayName(team)}
       </p>

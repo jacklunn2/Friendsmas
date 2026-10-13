@@ -27,6 +27,16 @@ The full product spec lives in the [Friendsmas Product Spec](https://claude.ai/c
 - **Phones** show what's playing, the timer, their team's place and their own share of the points, but only after the TV has revealed them.
 - **Start fresh** clears a rehearsal (teams, points, reveals and test guests) but keeps your activities and the guest link. Once real points exist, the draw can't be reset.
 
+**Block 3: the quiz engine**
+
+- **Quizzes are activities.** Choose "Quiz on phones" when adding an activity, then set team or individual answers, points per correct answer, seconds per question and an optional speed bonus.
+- **Question editor** in the control room: multiple choice (2–6 options), true or false, closest number and typed answers (several accepted spellings), each with an optional picture for the TV, its own points and time, notes for you and a fun fact. Reorder, edit or delete at any time.
+- **Spreadsheet import.** Paste rows from Google Sheets or Excel (or a CSV) with the columns Type, Question, Answer, Wrong answers 1–5, Seconds, Points, Notes, Fun fact. There's a template to download.
+- **Running it.** The big button steps through: open a question, close answers (or let the timer do it), reveal the answer, next question, then show the round results. The TV shows the question, picture, options, countdown and who's answered; the reveal shows the answer and who got it.
+- **Phones** show the question and answer buttons. In team quizzes, partners share one answer and see each other's choice; the last answer in counts.
+- **Marking is automatic.** Typed answers ignore case and punctuation; near misses are flagged for you to tick or cross. You can overrule any mark, even after the reveal. Closest-number points go to every team tied for closest.
+- **Presenter view** shows the answer, your notes, the fun fact, every answer as it comes in, and the next question. Questions and answers never reach guests' phones or the TV until you open and reveal them.
+
 ## Screens
 
 | Address | Who uses it |
@@ -66,7 +76,7 @@ Checks:
 ```bash
 npm test                                             # game-rule tests
 npm run typecheck
-node scripts/simulate.mjs http://localhost:5173 <password>   # full rehearsal: host, stage, 12 phones and scoring
+node scripts/simulate.mjs http://localhost:5173 <password>   # full rehearsal: host, stage, 12 phones, scoring and a quiz
 ```
 
 The rehearsal script starts the local event fresh and clears its guest list and activities, so only run it against your local server, never the live one.

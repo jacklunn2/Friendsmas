@@ -4,6 +4,7 @@ import { FINAL_REVEAL_MS, SPIN_MS, teamDisplayName, type RevealEventView, type S
 import { audioOn, enableAudio, sfx } from "../audio";
 import { storage, useRoom, useTicker } from "../net";
 import { Avatar, ConnectionBanner, EventCodeContext, formatClock, playerMap, TeamCard, teamStyle, Wordmark } from "../ui";
+import { QuizStage } from "./QuizStage";
 import { ActivityIntro, ActivityResults, Standings } from "./Scoreboard";
 import { Wheel } from "./Wheel";
 
@@ -172,6 +173,8 @@ function StageScene({ view, anim, serverNow, onLanded, onSpin }: SceneProps) {
   switch (view.stage.screen) {
     case "activity":
       return <ActivityIntro key={view.stage.activityId} view={view} serverNow={serverNow} />;
+    case "quiz":
+      return view.quiz ? <QuizStage key={`${view.quiz.activityId}-${view.quiz.question?.id ?? "intro"}`} view={view} serverNow={serverNow} /> : <Teams view={view} serverNow={serverNow} />;
     case "results":
       return view.results ? <ActivityResults key={view.results.activityId} view={view} /> : <Teams view={view} serverNow={serverNow} />;
     case "standings":

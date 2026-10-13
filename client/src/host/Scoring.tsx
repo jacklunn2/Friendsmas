@@ -7,6 +7,7 @@ import {
   ordinal,
   signed,
   teamDisplayName,
+  type ActivityFormat,
   type ActivityKind,
   type ActivityView,
   type HostPlayer,
@@ -17,6 +18,7 @@ import {
 } from "../../../shared/types";
 import { useTicker } from "../net";
 import { Avatar, formatClock, teamStyle } from "../ui";
+import { QuizPad, quizSummary } from "./Quiz";
 
 /** Sends an action; resolves to its data (or true) on success, undefined on failure. */
 export type Run = <T = unknown>(action: string, payload?: Record<string, unknown>, okText?: string) => Promise<T | undefined>;
@@ -85,9 +87,11 @@ export function ScoringPanel({ view, run, notify, serverNow }: Props) {
                 >
                   <span className="activity-list__name">{a.name}</span>
                   <span className="activity-list__meta">
-                    {a.kind === "team" ? "Team" : "Individual"} · {schemeSummary(a)}
+                    {a.format === "quiz"
+                      ? `Quiz · ${a.questionCount} ${a.questionCount === 1 ? "question" : "questions"} · ${a.kind === "team" ? "team answers" : "individual answers"}`
+                      : `${a.kind === "team" ? "Team" : "Individual"} · ${schemeSummary(a)}`}
                     {pts > 0 && ` · ${pts} scored`}
-                    {isOn && <span className="tag tag--on">on TV</span>}
+                    {(isOn || (a.format === "quiz" && view.stage.screen === "quiz" && view.quiz?.activityId === a.id)) && <span className="tag tag--on">on TV</span>}
                     {a.resultsShown && !isOn && <span className="tag">results shown</span>}
                   </span>
                 </button>
@@ -156,6 +160,8 @@ function tvStatus(view: HostView): string {
   switch (view.stage.screen) {
     case "activity":
       return a?.name ?? "An activity";
+    case "quiz":
+      return view.quiz && view.quiz.index >= 0 ? `${a?.name ?? "Quiz"}, question ${view.quiz.index + 1}` : (a?.name ?? "Quiz");
     case "results":
       return `${a?.name ?? "Activity"} results`;
     case "standings":
@@ -255,7 +261,46 @@ interface PadProps {
   onEdit: () => void;
 }
 
-function ActivityPad({ activity: a, view, run, scored, players, serverNow, onEdit }: PadProps) {
+function ActivityPad(props: PadProps) {
+  const { activity: a, view, run, players, serverNow, onEdit } = props;
+  if (a.format === "quiz") {
+    const hasPoints = view.ledger.some((e) => e.activityId === a.id && !e.voided);
+    return (
+      <div className="pad">
+        <header className="pad__head">
+          <div>
+            <h3 className="pad__title">{a.name}</h3>
+            <p className="host__muted pad__summary">{quizSummary(a)}</p>
+          </div>
+          <div className="pad__tools">
+            <button className="btn btn--small btn--ghost" onClick={onEdit}>
+              Edit
+            </button>
+            {!hasPoints && (
+              <button
+                className="btn btn--small btn--ghost"
+                onClick={() => {
+                  if (confirm(`Remove ${a.name} and all its questions?`)) run("activity.delete", { id: a.id });
+                }}
+              >
+                Remove
+              </button>
+            )}
+            {hasPoints && (
+              <button className="btn btn--small btn--secondary" onClick={() => run("results.show", { activityId: a.id })}>
+                Show the results on the TV
+              </button>
+            )}
+          </div>
+        </header>
+        <QuizPad activity={a} view={view} run={run} players={players} serverNow={serverNow} />
+      </div>
+    );
+  }
+  return <LiveActivityPad {...props} />;
+}
+
+function LiveActivityPad({ activity: a, view, run, scored, players, serverNow, onEdit }: PadProps) {
   const ready = view.draw.phase === "complete";
   const entries = view.ledger.filter((e) => e.activityId === a.id && !e.voided);
   const onTv = view.stage.activityId === a.id && view.stage.screen === "activity";
@@ -609,6 +654,9 @@ function AdjustForm({ view, players, scored }: { view: HostView; players: Map<st
 
 function ActivityForm({ run, activity, onDone }: { run: Run; activity?: ActivityView; onDone: (id?: string) => void }) {
   const [name, setName] = useState(activity?.name ?? "");
+  const [format, setFormat] = useState<ActivityFormat>(activity?.format ?? "live");
+  const [speedBonus, setSpeedBonus] = useState(String(activity?.speedBonus ?? 0));
+  const [questionSeconds, setQuestionSeconds] = useState(String(activity?.questionSeconds ?? 30));
   const [kind, setKind] = useState<ActivityKind>(activity?.kind ?? "team");
   const [scoring, setScoring] = useState<ScoringScheme>(activity?.scoring ?? "placement");
   const [placements, setPlacements] = useState((activity?.placements ?? [5, 3, 1]).join(", "));
@@ -625,10 +673,14 @@ function ActivityForm({ run, activity, onDone }: { run: Run; activity?: Activity
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
+    const quiz = format === "quiz";
     const payload = {
       name,
+      format,
+      speedBonus: quiz ? Number(speedBonus) || 0 : 0,
+      questionSeconds: quiz ? Math.max(0, Number(questionSeconds) || 0) : 30,
       kind,
-      scoring,
+      scoring: quiz ? "perCorrect" : scoring,
       placements: parsedPlaces,
       perCorrect: Number(perCorrect) || 1,
       description,
@@ -649,6 +701,34 @@ function ActivityForm({ run, activity, onDone }: { run: Run; activity?: Activity
         <span className="field__label">Name</span>
         <input className="input" value={name} maxLength={ACTIVITY_NAME_MAX} placeholder="Name of the game" onChange={(e) => setName(e.target.value)} required autoFocus />
       </label>
+      <Fieldset legend="Format">
+        <Radio name="format" checked={format === "live"} onChange={() => setFormat("live")} title="Played in the room" body="You award the points as it's played." />
+        <Radio name="format" checked={format === "quiz"} onChange={() => setFormat("quiz")} title="Quiz on phones" body="Questions on the TV, answers on phones, marked automatically." />
+      </Fieldset>
+      {format === "quiz" ? (
+        <>
+          <Fieldset legend="Who answers">
+            <Radio name="kind" checked={kind === "team"} onChange={() => setKind("team")} title="Teams" body="One shared answer per team, from either phone." />
+            <Radio name="kind" checked={kind === "individual"} onChange={() => setKind("individual")} title="Individuals" body="Everyone answers on their own phone, for their team." />
+          </Fieldset>
+          <div className="qform__row">
+            <label className="field field--inline">
+              <span className="field__label">Points per correct answer</span>
+              <input className="input input--small input--num" type="number" min={1} value={perCorrect} onChange={(e) => setPerCorrect(e.target.value)} />
+            </label>
+            <label className="field field--inline">
+              <span className="field__label">Seconds per question (0 for no timer)</span>
+              <input className="input input--small input--num" type="number" min={0} value={questionSeconds} onChange={(e) => setQuestionSeconds(e.target.value)} />
+            </label>
+            <label className="field field--inline">
+              <span className="field__label">Speed bonus (0 for none)</span>
+              <input className="input input--small input--num" type="number" min={0} value={speedBonus} onChange={(e) => setSpeedBonus(e.target.value)} />
+            </label>
+          </div>
+          <p className="host__muted">You can change the points and time for any single question. You'll write the questions after saving.</p>
+        </>
+      ) : (
+        <>
       <Fieldset legend="Who plays">
         <Radio name="kind" checked={kind === "team"} onChange={() => setKind("team")} title="Teams" body="Each pair plays together. You can still credit the player who earned the points." />
         <Radio name="kind" checked={kind === "individual"} onChange={() => setKind("individual")} title="Individuals" body="Everyone plays alone, and their points go to their team." />
@@ -691,6 +771,8 @@ function ActivityForm({ run, activity, onDone }: { run: Run; activity?: Activity
         <span className="field__label">Timer in seconds (optional)</span>
         <input className="input input--small input--num" type="number" min={0} value={timer} onChange={(e) => setTimer(e.target.value)} placeholder="None" />
       </label>
+        </>
+      )}
       <div className="activity-form__actions">
         <button type="button" className="btn btn--ghost" onClick={() => onDone()}>
           Cancel

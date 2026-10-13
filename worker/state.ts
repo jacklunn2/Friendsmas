@@ -1,5 +1,8 @@
 import type {
+  ActivityFormat,
   ActivityKind,
+  QuestionType,
+  QuizPhase,
   DrawPhase,
   EntryKind,
   NamingPhase,
@@ -58,9 +61,49 @@ export interface DrawState {
   lockedAt: number | null;
 }
 
+export interface Question {
+  id: string;
+  type: QuestionType;
+  prompt: string;
+  options: string[];
+  correctIndex: number;
+  numberAnswer: number | null;
+  accepted: string[];
+  imageId: string | null;
+  points: number | null;
+  seconds: number | null;
+  notes: string;
+  fact: string;
+}
+
+export interface QuizAnswer {
+  value: string;
+  by: string;
+  at: number;
+}
+
+export interface QuizState {
+  activityId: string | null;
+  index: number;
+  phase: QuizPhase;
+  openedAt: number | null;
+  endsAt: number | null;
+  /** activityId → questionId → answererId (team or guest) → answer */
+  answers: Record<string, Record<string, Record<string, QuizAnswer>>>;
+  /** Host decisions that override automatic marking: questionId → answererId → correct */
+  overrides: Record<string, Record<string, boolean>>;
+  /** Questions whose answers have been revealed. */
+  revealed: string[];
+}
+
+export function freshQuiz(): QuizState {
+  return { activityId: null, index: -1, phase: "intro", openedAt: null, endsAt: null, answers: {}, overrides: {}, revealed: [] };
+}
+
 export interface Activity {
   id: string;
   name: string;
+  format?: ActivityFormat;
   kind: ActivityKind;
   scoring: ScoringScheme;
   placements: number[];
@@ -69,6 +112,9 @@ export interface Activity {
   timerSeconds: number;
   resultsShown: boolean;
   createdAt: number;
+  speedBonus?: number;
+  questionSeconds?: number;
+  questions?: Question[];
 }
 
 /** One score change. Totals are always added up from these; nothing is ever deleted. */
@@ -82,6 +128,7 @@ export interface LedgerEntry {
   reason: string;
   kind: EntryKind;
   placement: number | null;
+  questionId?: string | null;
   voided: boolean;
   voidedAt: number | null;
   revealed: boolean;
@@ -124,6 +171,7 @@ export interface ServerState {
   snapshotSeq: number;
   blackout: boolean;
   stage: StageState;
+  quiz: QuizState;
 }
 
 export function freshStage(): StageState {
@@ -138,6 +186,13 @@ export function migrate(s: ServerState): ServerState {
   s.snapshotSeq ??= 0;
   s.blackout ??= false;
   s.stage ??= freshStage();
+  s.quiz ??= freshQuiz();
+  for (const a of s.activities) {
+    a.format ??= "live";
+    a.speedBonus ??= 0;
+    a.questionSeconds ??= 30;
+    a.questions ??= [];
+  }
   return s;
 }
 
@@ -165,6 +220,7 @@ export function freshState(now: number): ServerState {
     snapshotSeq: 0,
     blackout: false,
     stage: freshStage(),
+    quiz: freshQuiz(),
   };
 }
 

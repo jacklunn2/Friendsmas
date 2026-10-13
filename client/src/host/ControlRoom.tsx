@@ -155,7 +155,7 @@ function NowPanel({ view, run, serverNow }: { view: HostView; run: Run; serverNo
   const { draw, naming, roster } = view;
   const cooling = view.spinCooldownUntil !== null && view.spinCooldownUntil > serverNow();
   const namingOpen = naming.phase === "open";
-  useTicker(250, cooling || namingOpen);
+  useTicker(250, cooling || namingOpen || view.quiz?.phase === "open");
 
   const act = async (action: string, payload?: Record<string, unknown>) => {
     setBusy(true);
@@ -205,6 +205,35 @@ function NowPanel({ view, run, serverNow }: { view: HostView; run: Run; serverNo
     label = "Close team naming now";
     hint = `${formatClock((naming.deadline ?? 0) - serverNow())} left · ${named} of ${view.teams.length} teams named`;
     onClick = () => act("naming.close");
+  } else if (view.stage.screen === "quiz" && view.quiz && !view.intermission) {
+    const qz = view.quiz;
+    const quizName = view.activities.find((a) => a.id === qz.activityId)?.name ?? "The quiz";
+    const total = qz.kind === "team" ? view.teams.length : view.teams.reduce((n, t) => n + t.memberIds.length, 0);
+    if (qz.phase === "intro") {
+      label = "Open question 1";
+      hint = `${quizName} is on the TV. Open the first question when everyone's ready.`;
+      onClick = () => act("quiz.open");
+    } else if (qz.phase === "open") {
+      const left = qz.endsAt ? ` · ${formatClock(qz.endsAt - serverNow())} left` : "";
+      label = "Close answers";
+      hint = `Question ${qz.index + 1} of ${qz.total}: ${view.quizAnswers.length} of ${total} answered${left}`;
+      onClick = () => act("quiz.close");
+    } else if (qz.phase === "closed") {
+      const toCheck = view.quizAnswers.filter((x) => x.auto === "close" && x.override === null).length;
+      label = "Reveal the answer";
+      hint = toCheck
+        ? `${toCheck} typed ${toCheck === 1 ? "answer is" : "answers are"} close. Check ${toCheck === 1 ? "it" : "them"} under Scoring first, or after the reveal.`
+        : `Question ${qz.index + 1} of ${qz.total}: answers are in.`;
+      onClick = () => act("quiz.reveal");
+    } else if (qz.index + 1 < qz.total) {
+      label = `Open question ${qz.index + 2}`;
+      hint = `${qz.total - qz.index - 1} ${qz.total - qz.index - 1 === 1 ? "question" : "questions"} to go in ${quizName}.`;
+      onClick = () => act("quiz.open");
+    } else {
+      label = "Show the round results";
+      hint = `That was the last question in ${quizName}. Points stay hidden until now.`;
+      onClick = () => act("results.show", { activityId: qz.activityId });
+    }
   } else {
     const anyPoints = view.ledger.some((e) => !e.voided);
     const onBoard = view.stage.screen === "standings" || view.stage.screen === "final";

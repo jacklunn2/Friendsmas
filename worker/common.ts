@@ -20,6 +20,8 @@ export interface ActionResult {
   noChange?: boolean;
   /** Guests whose stored photos should be deleted. */
   deletePhotos?: string[];
+  /** Quiz pictures that should be deleted. */
+  deleteImages?: string[];
 }
 
 export type Payload = Record<string, unknown>;

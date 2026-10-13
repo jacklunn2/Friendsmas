@@ -304,6 +304,46 @@ async function main() {
   const aceView = await acePhone.until((v) => v.standings !== null);
   check(aceView.me.id !== ace || aceView.myPoints === 4, "a guest sees their own share of the points");
 
+  // --- Quiz
+  const { id: quizId } = await host.req("activity.create", { name: "Test quiz", format: "quiz", kind: "team", perCorrect: 2, questionSeconds: 0 });
+  const imported = await host.req("quiz.import", {
+    activityId: quizId,
+    text: ["Type\tQuestion\tAnswer\tWrong 1\tWrong 2", "\tPick the right one\tRight\tWrong\tAlso wrong", "\tSpell the word\tSnowflake"].join("\n"),
+  });
+  check(imported.added === 2, "questions import from pasted spreadsheet rows");
+  await host.req("quiz.start", { activityId: quizId });
+  await stage.until((v) => v.stage.screen === "quiz" && v.quiz?.phase === "intro");
+  await host.req("quiz.open");
+  const q1 = await stage.until((v) => v.quiz?.phase === "open");
+  check(!JSON.stringify(q1).includes("correctIndex") && q1.quiz.reveal === null, "the TV gets the question but not the answer");
+  const qTeams = host.view.teams;
+  const rightIndex = q1.quiz.question.options.indexOf("Right");
+  const phoneFor = (pid) => Object.values(phones).find((c) => c.view?.me?.id === pid && c.ws.readyState === 1) ?? (avaAgain.view.me?.id === pid ? avaAgain : null);
+  const memberPhone = (t) => t.memberIds.map(phoneFor).find(Boolean);
+  const pA = memberPhone(qTeams[0]);
+  const pB = memberPhone(qTeams[1]);
+  await pA.req("quiz.answer", { questionId: q1.quiz.question.id, value: rightIndex });
+  await pB.req("quiz.answer", { questionId: q1.quiz.question.id, value: (rightIndex + 1) % 3 });
+  await stage.until((v) => v.quiz.answeredIds.length === 2);
+  check(true, "phones answer and the TV sees who's in");
+  await host.req("quiz.close");
+  const late = await pA.req("quiz.answer", { questionId: q1.quiz.question.id, value: 0 }).catch((e) => e.message);
+  check(/Time's up/.test(late), "late answers are refused");
+  await host.req("quiz.reveal");
+  const qr1 = await stage.until((v) => v.quiz.phase === "revealed");
+  check(qr1.quiz.reveal.results.find((x) => x.answererId === qTeams[0].id)?.correct === true, "the right answer is marked right");
+  await host.req("quiz.open");
+  const q2 = await stage.until((v) => v.quiz.phase === "open" && v.quiz.index === 1);
+  await pB.req("quiz.answer", { questionId: q2.quiz.question.id, value: "snowflak" });
+  await host.until((v) => v.quizAnswers.length === 1);
+  check(host.view.quizAnswers[0].auto === "close", "a near-miss typed answer is flagged for checking");
+  await host.req("quiz.mark", { answererId: qTeams[1].id, correct: true });
+  await host.req("quiz.reveal");
+  await host.until((v) => v.quiz.phase === "revealed");
+  await host.req("results.show", { activityId: quizId });
+  const qr = await stage.until((v) => v.stage.screen === "results" && v.results?.activityId === quizId);
+  check(qr.results.rows.filter((r) => r.points === 2).length === 2, "quiz points reach the round results");
+
   await host.req("standings.blackout", { on: true });
   const blocked = await host.req("standings.reveal").catch((e) => e.message);
   check(/blackout/.test(blocked), "the blackout freezes the leaderboard");

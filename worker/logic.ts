@@ -24,8 +24,9 @@ import {
   type Payload,
 } from "./common";
 import { pick, randomDigits, randomToken, shuffle } from "./random";
+import { quizAlarm, quizHost, quizPlayer } from "./quiz";
 import { scoringHost } from "./scoring";
-import { freshDraw, freshStage, newId, type RevealEvent, type ServerPlayer, type ServerState, type ServerTeam } from "./state";
+import { freshDraw, freshQuiz, freshStage, newId, type RevealEvent, type ServerPlayer, type ServerState, type ServerTeam } from "./state";
 import { TEAM_NAMES } from "./teamNames";
 
 export { UserError, findPlayer, findTeam };
@@ -205,6 +206,7 @@ function clearScores(s: ServerState): void {
   s.snapshots = [];
   s.blackout = false;
   s.stage = freshStage();
+  s.quiz = freshQuiz();
   for (const a of s.activities) a.resultsShown = false;
 }
 
@@ -241,11 +243,22 @@ function closeNamingNow(s: ServerState): void {
 
 /** Called by the Durable Object alarm. Returns true if anything changed. */
 export function onAlarm(s: ServerState, now: number): boolean {
+  let changed = false;
   if (s.naming.phase === "open" && s.naming.deadline !== null && now >= s.naming.deadline - 250) {
     closeNamingNow(s);
-    return true;
+    changed = true;
   }
-  return false;
+  if (quizAlarm(s, now)) changed = true;
+  return changed;
+}
+
+/** When the Durable Object should next wake up: the earliest deadline, if any. */
+export function nextAlarmAt(s: ServerState): number | null {
+  const times = [
+    s.naming.phase === "open" ? s.naming.deadline : null,
+    s.quiz.phase === "open" ? s.quiz.endsAt : null,
+  ].filter((t): t is number => t !== null);
+  return times.length ? Math.min(...times) : null;
 }
 
 function playerTeam(s: ServerState, actor: Actor): ServerTeam {
@@ -473,6 +486,7 @@ const host: Record<string, Handler> = {
     return { audit: ["stage.intermission", s.intermission ? "On" : "Off"] };
   },
   ...scoringHost,
+  ...quizHost,
 };
 
 const player: Record<string, Handler> = {
@@ -559,6 +573,7 @@ const player: Record<string, Handler> = {
     t.motto = str(p, "motto", { max: MOTTO_MAX, optional: true, label: "the motto" });
     return {};
   },
+  ...quizPlayer,
 };
 
 /** Runs one client request against the state. Mutates `s` in place. */

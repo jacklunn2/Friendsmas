@@ -16,7 +16,10 @@ export type Role = "host" | "stage" | "player";
 export type ActivityKind = "team" | "individual";
 export type ScoringScheme = "placement" | "perCorrect" | "judged";
 export type EntryKind = "award" | "bonus" | "penalty";
-export type StageScreen = "teams" | "activity" | "results" | "standings" | "final";
+export type StageScreen = "teams" | "activity" | "quiz" | "results" | "standings" | "final";
+export type ActivityFormat = "live" | "quiz";
+export type QuestionType = "choice" | "truefalse" | "number" | "text";
+export type QuizPhase = "intro" | "open" | "closed" | "revealed";
 
 export interface PublicPlayer {
   id: string;
@@ -75,6 +78,8 @@ export interface NamingView {
 export interface ActivityView {
   id: string;
   name: string;
+  /** "live": you score it as it's played. "quiz": questions answered on phones and marked automatically. */
+  format: ActivityFormat;
   kind: ActivityKind;
   scoring: ScoringScheme;
   /** Points for 1st, 2nd, 3rd… when scoring is "placement". */
@@ -85,6 +90,87 @@ export interface ActivityView {
   /** Default length of the on-screen timer, or 0 for none. */
   timerSeconds: number;
   resultsShown: boolean;
+  /** Quiz only: bonus for the fastest correct answer to each question (0 = off). */
+  speedBonus: number;
+  /** Quiz only: default seconds per question (0 = no timer). */
+  questionSeconds: number;
+  questionCount: number;
+}
+
+/** A quiz question as the host edits it. Never sent to guests or the TV. */
+export interface QuestionView {
+  id: string;
+  type: QuestionType;
+  prompt: string;
+  /** Multiple choice: the options in display order. */
+  options: string[];
+  /** Multiple choice and true/false: the index of the right option (true = 0, false = 1). */
+  correctIndex: number;
+  /** Closest number: the right answer. */
+  numberAnswer: number | null;
+  /** Typed answer: every accepted answer. */
+  accepted: string[];
+  imageId: string | null;
+  /** Overrides the quiz's points per correct answer. */
+  points: number | null;
+  /** Overrides the quiz's seconds per question; 0 = no timer. */
+  seconds: number | null;
+  notes: string;
+  fact: string;
+}
+
+/** The question as guests and the TV see it while it's open: no answer. */
+export interface LiveQuestion {
+  id: string;
+  number: number;
+  type: QuestionType;
+  prompt: string;
+  options: string[];
+  imageId: string | null;
+  points: number;
+}
+
+export interface QuizResult {
+  /** A team id (team quizzes) or a guest id (individual quizzes). */
+  answererId: string;
+  correct: boolean;
+  /** What they answered, for closest-number and typed questions. */
+  value: string | null;
+  points: number;
+  fastest: boolean;
+}
+
+export interface QuizView {
+  activityId: string;
+  kind: ActivityKind;
+  phase: QuizPhase;
+  /** 0-based index of the current question, or -1 before the first. */
+  index: number;
+  total: number;
+  endsAt: number | null;
+  question: LiveQuestion | null;
+  /** Who has answered the current question. */
+  answeredIds: string[];
+  /** Only once the answer is revealed. */
+  reveal: { answer: string; correctIndex: number | null; results: QuizResult[] } | null;
+}
+
+export interface MyQuizAnswer {
+  value: string;
+  byPlayerId: string;
+}
+
+/** The host's view of every answer to the current question, for marking. */
+export interface HostQuizAnswer {
+  answererId: string;
+  value: string;
+  byPlayerId: string;
+  at: number;
+  /** What automatic marking decided. "close" = a near miss to review. */
+  auto: "correct" | "close" | "wrong";
+  /** The host's decision, if any. */
+  override: boolean | null;
+  correct: boolean;
 }
 
 export interface TimerView {
@@ -144,6 +230,8 @@ export interface PublicView {
   blackout: boolean;
   /** Results of the activity on the TV, when the TV is showing results. */
   results: ResultsView | null;
+  /** The quiz on the TV, if any. */
+  quiz: QuizView | null;
 }
 
 export interface MyTeamView extends PublicTeam {
@@ -157,6 +245,8 @@ export interface PlayerView extends PublicView {
   myTeam: MyTeamView | null;
   /** This guest's share of their team's points at the last reveal. */
   myPoints: number;
+  /** Their (or their team's) answer to the open quiz question. */
+  myQuizAnswer: MyQuizAnswer | null;
   /** Names on the guest list that can still be claimed. */
   claimable: { id: string; name: string }[];
 }
@@ -192,6 +282,7 @@ export interface LedgerEntryView {
   kind: EntryKind;
   /** 1-based placing, for placement awards. */
   placement: number | null;
+  questionId: string | null;
   voided: boolean;
   /** False until the host reveals it (activity results or a standings reveal). */
   revealed: boolean;
@@ -210,6 +301,12 @@ export interface HostView extends PublicView {
   liveTotals: Record<string, number>;
   /** True when the live totals differ from the last revealed leaderboard. */
   standingsStale: boolean;
+  /** Every quiz's questions, by activity. */
+  questions: Record<string, QuestionView[]>;
+  /** Answers to the current quiz question, for the presenter view. */
+  quizAnswers: HostQuizAnswer[];
+  /** Ids of questions already revealed, by activity. */
+  revealedQuestions: Record<string, string[]>;
 }
 
 export type AnyView = PlayerView | StageView | HostView;
@@ -243,6 +340,12 @@ export const ACTIVITY_NAME_MAX = 40;
 export const REASON_MAX = 60;
 export const MAX_POINTS = 1000;
 export const UNDO_MS = 10_000;
+export const QUESTION_MAX = 300;
+export const OPTION_MAX = 120;
+export const MAX_OPTIONS = 6;
+export const IMAGE_MAX_BYTES = 1_500_000;
+export const IMAGE_MAX_SIDE = 1600;
+export const ANSWER_MAX = 80;
 
 export const TEAM_COLOURS = [
   "#e2445c", // cranberry
@@ -298,3 +401,28 @@ export function scoringSummary(a: Pick<ActivityView, "scoring" | "placements" | 
   if (a.scoring === "perCorrect") return `${pts(a.perCorrect)} for every correct answer`;
   return "Points at the host's discretion";
 }
+
+export const OPTION_LETTERS = ["A", "B", "C", "D", "E", "F"] as const;
+
+export function imageUrl(id: string, eventCode: string): string {
+  return `/api/image/${id}?c=${eventCode}`;
+}
+
+/** The right answer, in words. */
+export function answerText(q: Pick<QuestionView, "type" | "options" | "correctIndex" | "numberAnswer" | "accepted">): string {
+  if (q.type === "choice") return `${OPTION_LETTERS[q.correctIndex] ?? "?"}: ${q.options[q.correctIndex] ?? ""}`;
+  if (q.type === "truefalse") return q.correctIndex === 0 ? "True" : "False";
+  if (q.type === "number") return q.numberAnswer === null ? "" : formatNumber(q.numberAnswer);
+  return q.accepted[0] ?? "";
+}
+
+export function formatNumber(n: number): string {
+  return n.toLocaleString("en-AU", { maximumFractionDigits: 6 });
+}
+
+export const QUESTION_TYPE_LABEL: Record<QuestionType, string> = {
+  choice: "Multiple choice",
+  truefalse: "True or false",
+  number: "Closest number",
+  text: "Typed answer",
+};
