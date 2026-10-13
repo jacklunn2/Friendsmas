@@ -647,7 +647,7 @@ function ActivityForm({ run, activity, onDone }: { run: Run; activity?: Activity
       <h3 className="pad__title">{activity ? `Edit ${activity.name}` : "New activity"}</h3>
       <label className="field">
         <span className="field__label">Name</span>
-        <input className="input" value={name} maxLength={ACTIVITY_NAME_MAX} placeholder="Christmas charades" onChange={(e) => setName(e.target.value)} required autoFocus />
+        <input className="input" value={name} maxLength={ACTIVITY_NAME_MAX} placeholder="Name of the game" onChange={(e) => setName(e.target.value)} required autoFocus />
       </label>
       <Fieldset legend="Who plays">
         <Radio name="kind" checked={kind === "team"} onChange={() => setKind("team")} title="Teams" body="Each pair plays together. You can still credit the player who earned the points." />
@@ -683,7 +683,7 @@ function ActivityForm({ run, activity, onDone }: { run: Run; activity?: Activity
           maxLength={1000}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder={"One of you acts out a Christmas film; the other guesses.\nNo talking, no props.\n60 seconds per film."}
+          placeholder="Write the rules players will see on their phones. Put each rule on its own line."
         />
         <span className="host__muted">The TV shows only the game's name. Players see these on their phones when you show the game on the TV.</span>
       </label>
