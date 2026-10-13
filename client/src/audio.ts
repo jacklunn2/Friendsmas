@@ -89,6 +89,25 @@ export const sfx = {
     const hits = Math.floor(seconds * 18);
     for (let i = 0; i < hits; i++) noise(t + i / 18, 0.06, 0.15 + (i / hits) * 0.35);
   },
+  /** A row lands on the leaderboard. */
+  thud() {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    tone(196, t, 0.35, "triangle", 0.22);
+    tone(392, t, 0.25, "sine", 0.08);
+  },
+  /** The timer runs out. */
+  buzzer() {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    tone(146.8, t, 0.9, "sawtooth", 0.12);
+    tone(155.6, t, 0.9, "sawtooth", 0.1);
+  },
+  /** Ten seconds left, and each second after. */
+  pip() {
+    if (!ctx) return;
+    tone(988, ctx.currentTime, 0.12, "sine", 0.12);
+  },
   /** Everyone is on a team. */
   finale() {
     if (!ctx) return;

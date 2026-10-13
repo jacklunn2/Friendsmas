@@ -96,13 +96,10 @@ async function main() {
   check(!!intruder.unauthorized, "control room refuses a made-up token");
 
   // Start clean if a previous run left anything behind.
-  if (host.view.draw.phase !== "draft") {
-    await host.req("draw.reset", { confirm: "RESET" });
-    await host.until((v) => v.draw.phase === "draft");
-  }
-  for (const p of host.view.roster.slice()) await host.req("guest.remove", { id: p.id });
+  await host.req("event.startFresh", { confirm: "START FRESH", clearGuests: true });
+  for (const a of host.view.activities.slice()) await host.req("activity.delete", { id: a.id }).catch(() => {});
   await host.req("draw.options", { revealMode: "live", oddFallback: null });
-  await host.until((v) => v.roster.length === 0 && v.draw.oddFallback === null);
+  await host.until((v) => v.roster.length === 0 && v.draw.oddFallback === null && v.activities.length === 0);
 
   const code = host.view.eventCode;
   const badPhone = await new Client({ role: "player", code: "wrongcode" }).open();
@@ -269,6 +266,50 @@ async function main() {
 
   const resetErr = await host.req("draw.reset", { confirm: "nope" }).catch((e) => e.message);
   check(/RESET/.test(resetErr), "reset needs the typed confirmation");
+
+  // --- Scoring
+  const { id: charades } = await host.req("activity.create", { name: "Charades", kind: "team", scoring: "placement", placements: [5, 3, 1] });
+  const { id: speed } = await host.req("activity.create", { name: "Speed round", kind: "individual", scoring: "perCorrect", perCorrect: 2 });
+  check(stage.view.activities.length === 0, "planned activities stay off the TV");
+  await host.req("stage.show", { screen: "activity", activityId: charades });
+  await stage.until((v) => v.stage.screen === "activity" && v.activities.some((a) => a.name === "Charades"));
+  check(true, "an activity goes on the TV");
+
+  const teamsNow = host.view.teams;
+  const [tA, tB, tC] = teamsNow;
+  await host.req("score.award", { activityId: charades, teamId: tA.id, placement: 1 });
+  await host.req("score.award", { activityId: charades, teamId: tB.id, placement: 2 });
+  const third = await host.req("score.award", { activityId: charades, teamId: tC.id, placement: 3 });
+  await host.req("score.void", { entryId: third.entryId });
+  const ace = tB.memberIds[0];
+  await host.req("score.award", { activityId: speed, teamId: tB.id, playerId: ace });
+  await host.req("score.award", { activityId: speed, teamId: tB.id, playerId: ace });
+  await host.req("score.adjust", { teamId: tC.id, points: 2, reason: "Best costume" });
+  const penErr = await host.req("score.adjust", { teamId: tC.id, points: -1 }).catch((e) => e.message);
+  check(/reason/.test(penErr), "a penalty needs a reason");
+  await host.until((v) => v.liveTotals[tB.id] === 7);
+  check(host.view.liveTotals[tA.id] === 5 && host.view.liveTotals[tB.id] === 7 && host.view.liveTotals[tC.id] === 2, "live totals add up, with the voided score left out");
+  check(stage.view.standings === null, "points stay hidden from the TV until revealed");
+  const resetLocked = await host.req("draw.reset", { confirm: "RESET" }).catch((e) => e.message);
+  check(/Start fresh/.test(resetLocked), "the draw can't be reset once points exist");
+
+  await host.req("results.show", { activityId: charades });
+  const res = await stage.until((v) => v.stage.screen === "results");
+  check(res.results.rows[0].teamId === tA.id && res.results.rows[0].points === 5, "the activity's results reach the TV");
+
+  await host.req("standings.reveal");
+  const board = await stage.until((v) => v.stage.screen === "standings" && v.standings);
+  check(board.standings.rows[0].teamId === tB.id && board.standings.rows[0].points === 7, "the leaderboard puts the leader first");
+  const acePhone = Object.values(phones).find((c) => c.view.me?.id === ace) ?? avaAgain;
+  const aceView = await acePhone.until((v) => v.standings !== null);
+  check(aceView.me.id !== ace || aceView.myPoints === 4, "a guest sees their own share of the points");
+
+  await host.req("standings.blackout", { on: true });
+  const blocked = await host.req("standings.reveal").catch((e) => e.message);
+  check(/blackout/.test(blocked), "the blackout freezes the leaderboard");
+  await host.req("standings.final");
+  const fin = await stage.until((v) => v.stage.screen === "final");
+  check(fin.standings.final === true && !fin.blackout, "the final results reveal everything");
 
   for (const c of [host, stage, intruder, badPhone, dupe, lou, avaAgain, ...Object.values(phones)]) {
     try {

@@ -1,5 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { MOTTO_MAX, NAME_MAX, SPIN_MS, FINAL_REVEAL_MS, teamDisplayName, type PlayerView, type PublicPlayer } from "../../../shared/types";
+import {
+  FINAL_REVEAL_MS,
+  MOTTO_MAX,
+  NAME_MAX,
+  SPIN_MS,
+  formatPoints,
+  placeLabel,
+  teamDisplayName,
+  type PlayerView,
+  type PublicPlayer,
+} from "../../../shared/types";
+import { revealDurationMs } from "../timing";
 import { storage, useRoom, useTicker } from "../net";
 import { prepareSelfie, uploadSelfie } from "../photo";
 import { Avatar, AvatarPicker, ConnectionBanner, EventCodeContext, formatClock, playerMap, TeamCard, teamStyle, Wordmark } from "../ui";
@@ -351,10 +362,93 @@ function InGame({ view, send, serverNow, getToken, code }: InGameProps) {
         {partners.length ? `With ${partners.map((p) => p.name).join(" and ")}` : "Your partner is still on the wheel…"}
       </h1>
       {stillToCome > 0 && partners.length > 0 && <p>One more teammate to come.</p>}
+      {phase === "complete" && <NowPlaying view={view} serverNow={serverNow} />}
       {phase === "complete" && <Naming view={view} send={send} serverNow={serverNow} />}
+      {phase === "complete" && <MyStandings view={view} serverNow={serverNow} />}
       <TeamCard team={team} players={players} showSeats />
       {photoButton}
     </section>
+  );
+}
+
+/** The activity on the TV right now, with its timer. */
+function NowPlaying({ view, serverNow }: { view: PlayerView; serverNow: () => number }) {
+  const a = view.stage.screen === "activity" ? view.activities.find((x) => x.id === view.stage.activityId) : undefined;
+  const timer = view.stage.timer;
+  useTicker(500, !!timer?.endsAt);
+  if (!a) return null;
+  const left = timer ? (timer.endsAt ? timer.endsAt - serverNow() : (timer.remainingMs ?? timer.durationMs)) : null;
+  return (
+    <div className="now-playing">
+      <div className="now-playing__head">
+        <span className="phone__muted">Now playing</span>
+        {left !== null && <span className="naming__clock">{left > 0 ? formatClock(left) : "Time's up"}</span>}
+      </div>
+      <h2 className="now-playing__name">{a.name}</h2>
+      {a.description && <p className="now-playing__desc">{a.description}</p>}
+    </div>
+  );
+}
+
+/** The team's place and points from the last reveal, held back until the TV has shown it. */
+function MyStandings({ view, serverNow }: { view: PlayerView; serverNow: () => number }) {
+  const st = view.standings;
+  const team = view.myTeam!;
+  const doneAt = st ? st.at + revealDurationMs(st.rows.length, st.final) : 0;
+  const waiting = !!st && serverNow() < doneAt;
+  useTicker(500, waiting);
+  // The previous reveal isn't sent, so while the TV reveals, ask guests to watch.
+  if (!st) return null;
+  if (waiting) {
+    return (
+      <div className="standings-card standings-card--wait">
+        <p className="now-playing__name">{st.final ? "The final results are on the TV!" : "The leaderboard is on the TV!"}</p>
+      </div>
+    );
+  }
+  const mine = st.rows.find((r) => r.teamId === team.id);
+  const teams = new Map(view.teams.map((t) => [t.id, t]));
+  const winners = st.rows.filter((r) => r.rank === 1).map((r) => teams.get(r.teamId)).filter(Boolean);
+  const won = mine?.rank === 1;
+  return (
+    <div className={`standings-card${st.final && won ? " is-winner" : ""}`}>
+      {st.final ? (
+        <p className="standings-card__headline">
+          {won
+            ? winners.length > 1
+              ? "🏆 You tied for first!"
+              : "🏆 Your team won Friendsmas!"
+            : `${winners.map((t) => teamDisplayName(t!)).join(" and ")} ${winners.length > 1 ? "tied for first" : "won"}. You finished ${mine ? placeLabel(mine) : "–"}.`}
+        </p>
+      ) : (
+        mine && (
+          <p className="standings-card__headline">
+            Your team is {placeLabel(mine)} with {formatPoints(mine.points)}
+          </p>
+        )
+      )}
+      {mine && mine.points > 0 && (
+        <p className="phone__muted">
+          You've earned {view.myPoints} of your team's {mine.points}.
+        </p>
+      )}
+      {view.blackout && !st.final && <p className="phone__muted">The leaderboard is frozen until the finale.</p>}
+      <ol className="standings-card__list">
+        {st.rows.map((r) => {
+          const t = teams.get(r.teamId);
+          if (!t) return null;
+          return (
+            <li key={r.teamId} className={`standings-card__row${r.teamId === team.id ? " is-mine" : ""}`} style={teamStyle(t)}>
+              <span className="standings-card__place">{placeLabel(r)}</span>
+              <span className="standings-card__team">
+                {t.badge} {teamDisplayName(t)}
+              </span>
+              <span className="standings-card__pts">{r.points}</span>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
 }
 
@@ -380,6 +474,9 @@ function Naming({ view, send, serverNow }: { view: PlayerView; send: Send; serve
   };
 
   if (!open && !team.name) return null;
+  // The motto can be set during naming and until the games begin.
+  const gamesStarted = !!view.standings || view.stage.screen !== "teams";
+  if (!open && gamesStarted) return null;
 
   return (
     <div className="naming">

@@ -6,7 +6,7 @@ import { DurableObject } from "cloudflare:workers";
 import { PHOTO_MAX_BYTES, type AuditEntry, type ClientRequest, type Role, type ServerMessage } from "../shared/types";
 import { onAlarm, runAction, UserError, type Actor } from "./logic";
 import { randomToken } from "./random";
-import { freshState, type ServerState } from "./state";
+import { freshState, migrate, type ServerState } from "./state";
 import { hostView, playerView, stageView } from "./views";
 
 export interface Env {
@@ -40,7 +40,7 @@ export class EventRoom extends DurableObject<Env> {
       );
       const stored = await ctx.storage.get<ServerState>("state");
       if (stored) {
-        this.state = stored;
+        this.state = migrate(stored);
       } else {
         this.state = freshState(Date.now());
         await ctx.storage.put("state", this.state);

@@ -3,6 +3,8 @@
 // already been revealed.
 
 import type {
+  ActivityView,
+  ResultsView,
   AuditEntry,
   DrawView,
   HostView,
@@ -13,7 +15,8 @@ import type {
   StageView,
 } from "../shared/types";
 import { revealedIds, spinCooldownUntil } from "./logic";
-import type { ServerPlayer, ServerState } from "./state";
+import { liveEntries, rank, standingsStale, standingsView, totalsFrom } from "./scoring";
+import type { Activity, ServerPlayer, ServerState } from "./state";
 
 export type Viewer =
   | { role: "host" }
@@ -85,6 +88,52 @@ function base(s: ServerState, viewer: Viewer, now: number): PublicView {
     draw,
     naming: { ...s.naming },
     intermission: s.intermission,
+    // Guests and the TV only learn about an activity once it's on the TV.
+    activities: s.activities
+      .filter((a) => viewer.role === "host" || a.id === s.stage.activityId || a.resultsShown)
+      .map(activityView),
+    stage: {
+      screen: s.stage.screen,
+      activityId: s.stage.activityId,
+      timer: s.stage.timer ? { ...s.stage.timer } : null,
+    },
+    standings: standingsView(s),
+    blackout: s.blackout,
+    results: resultsView(s),
+  };
+}
+
+function activityView(a: Activity): ActivityView {
+  return {
+    id: a.id,
+    name: a.name,
+    kind: a.kind,
+    scoring: a.scoring,
+    placements: a.placements,
+    perCorrect: a.perCorrect,
+    description: a.description,
+    timerSeconds: a.timerSeconds,
+    resultsShown: a.resultsShown,
+  };
+}
+
+/** The activity's revealed points, while its results are on the TV. */
+function resultsView(s: ServerState): ResultsView | null {
+  if (s.stage.screen !== "results" || !s.stage.activityId) return null;
+  const id = s.stage.activityId;
+  const entries = s.ledger.filter((e) => e.activityId === id && !e.voided && e.revealed);
+  const { teams, players } = totalsFrom(s, entries);
+  return {
+    activityId: id,
+    rows: rank(teams, s.teams).map((r) => ({
+      teamId: r.teamId,
+      points: r.points,
+      rank: r.rank,
+      earners: (s.teams.find((t) => t.id === r.teamId)?.memberIds ?? [])
+        .filter((pid) => players[pid])
+        .map((pid) => ({ playerId: pid, points: players[pid] }))
+        .sort((a, b) => b.points - a.points),
+    })),
   };
 }
 
@@ -103,6 +152,7 @@ export function playerView(s: ServerState, playerId: string | null, now: number)
     ...view,
     role: "player",
     me,
+    myPoints: raw ? (s.snapshots.at(-1)?.players[raw.id] ?? 0) : 0,
     myTeam:
       myTeamPublic && myTeamRaw
         ? { ...myTeamPublic, suggestions: myTeamRaw.suggestions, rerollUsed: myTeamRaw.rerollUsed }
@@ -132,5 +182,23 @@ export function hostView(s: ServerState, audit: AuditEntry[], now: number): Host
     audit,
     suggestions: Object.fromEntries(s.teams.map((t) => [t.id, t.suggestions])),
     spinCooldownUntil: spinCooldownUntil(s),
+    ledger: s.ledger
+      .slice()
+      .reverse()
+      .map((e) => ({
+        id: e.id,
+        at: e.at,
+        teamId: e.teamId,
+        playerId: e.playerId,
+        activityId: e.activityId,
+        points: e.points,
+        reason: e.reason,
+        kind: e.kind,
+        placement: e.placement,
+        voided: e.voided,
+        revealed: e.revealed,
+      })),
+    liveTotals: totalsFrom(s, liveEntries(s)).teams,
+    standingsStale: standingsStale(s),
   };
 }

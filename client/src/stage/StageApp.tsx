@@ -4,6 +4,7 @@ import { FINAL_REVEAL_MS, SPIN_MS, teamDisplayName, type RevealEventView, type S
 import { audioOn, enableAudio, sfx } from "../audio";
 import { storage, useRoom, useTicker } from "../net";
 import { Avatar, ConnectionBanner, EventCodeContext, formatClock, playerMap, TeamCard, teamStyle, Wordmark } from "../ui";
+import { ActivityIntro, ActivityResults, Standings } from "./Scoreboard";
 import { Wheel } from "./Wheel";
 
 // Timing of one reveal inside the server's spin cooldown.
@@ -167,8 +168,22 @@ function StageScene({ view, anim, serverNow, onLanded, onSpin }: SceneProps) {
   if (view.intermission) return <Intermission />;
   const { phase } = view.draw;
   if (phase === "draft") return <Arrivals view={view} />;
-  if (phase === "complete" && !anim) return <Teams view={view} serverNow={serverNow} />;
-  return <Draw view={view} anim={anim} onLanded={onLanded} onSpin={onSpin} />;
+  if (phase !== "complete" || anim) return <Draw view={view} anim={anim} onLanded={onLanded} onSpin={onSpin} />;
+  switch (view.stage.screen) {
+    case "activity":
+      return <ActivityIntro key={view.stage.activityId} view={view} serverNow={serverNow} />;
+    case "results":
+      return view.results ? <ActivityResults key={view.results.activityId} view={view} /> : <Teams view={view} serverNow={serverNow} />;
+    case "standings":
+    case "final":
+      return view.standings ? (
+        <Standings key={`${view.standings.seq}-${view.stage.screen}`} view={view} />
+      ) : (
+        <Teams view={view} serverNow={serverNow} />
+      );
+    default:
+      return <Teams view={view} serverNow={serverNow} />;
+  }
 }
 
 function Intermission() {

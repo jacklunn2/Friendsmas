@@ -17,6 +17,16 @@ The full product spec lives in the [Friendsmas Product Spec](https://claude.ai/c
 - **Control room.** One big button always does the next step. There's an intermission switch for the TV, and an activity log records every change.
 - **Rehearsal.** "Add 6 test guests" fills the guest list for a practice run.
 
+**Block 2: scoring and the leaderboard**
+
+- **Activities.** Plan the day's games in the control room: team or individual, scored by places (for example 5, 3, 1), per correct answer or by your judgement, with optional instructions and a timer for the TV.
+- **Team-only points.** Every point belongs to a team and can record which guest earned it. Totals are always added up from the points history, so nothing is counted twice. Undo voids a score; nothing is deleted.
+- **Fast scoring.** One tap per team for places, a counter for correct answers, quick +1/+2/+3/+5 for judged games, and bonuses or penalties with a reason. Every award has a 10-second undo.
+- **Hidden until revealed.** New points stay off the TV and phones. Show an activity's results, then reveal the standings: the leaderboard fills in from last place up, with each team's gain and movement.
+- **Blackout and finale.** Freeze the leaderboard for the last stretch, then reveal the final results, ending with the winners, their photos and confetti. Ties share a place.
+- **Phones** show what's playing, the timer, their team's place and their own share of the points, but only after the TV has revealed them.
+- **Start fresh** clears a rehearsal (teams, points, reveals and test guests) but keeps your activities and the guest link. Once real points exist, the draw can't be reset.
+
 ## Screens
 
 | Address | Who uses it |
@@ -56,7 +66,7 @@ Checks:
 ```bash
 npm test                                             # game-rule tests
 npm run typecheck
-node scripts/simulate.mjs http://localhost:5173 <password>   # full rehearsal: host, stage and 12 phones
+node scripts/simulate.mjs http://localhost:5173 <password>   # full rehearsal: host, stage, 12 phones and scoring
 ```
 
-The rehearsal script resets the local event, so only run it against your local server, never the live one.
+The rehearsal script starts the local event fresh and clears its guest list and activities, so only run it against your local server, never the live one.

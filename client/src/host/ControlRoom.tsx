@@ -11,9 +11,17 @@ import {
 } from "../../../shared/types";
 import { useTicker, type ConnStatus } from "../net";
 import { Avatar, ConnectionBanner, EventCodeContext, formatClock, teamStyle, Wordmark } from "../ui";
+import { ScoringPanel, type Notify, type Run } from "./Scoring";
 
 type Send = <T = unknown>(action: string, payload?: Record<string, unknown>) => Promise<T>;
-type Run = <T = unknown>(action: string, payload?: Record<string, unknown>, okText?: string) => Promise<T | undefined>;
+
+interface Toast {
+  kind: "ok" | "error";
+  text: string;
+  id: number;
+  action?: { label: string; onClick: () => void };
+  ms?: number;
+}
 
 interface Props {
   view: HostView;
@@ -23,14 +31,16 @@ interface Props {
 }
 
 export function ControlRoom({ view, status, send, serverNow }: Props) {
-  const [toast, setToast] = useState<{ kind: "ok" | "error"; text: string; id: number } | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
+  const notify: Notify = useCallback((t) => setToast({ ...t, id: Date.now() }), []);
 
   const run: Run = useCallback(
     async (action, payload, okText) => {
       try {
         const data = await send(action, payload);
         if (okText) setToast({ kind: "ok", text: okText, id: Date.now() });
-        return data as never;
+        // Success always returns something, so callers can tell it worked.
+        return (data ?? true) as never;
       } catch (e) {
         setToast({ kind: "error", text: (e as Error).message, id: Date.now() });
         return undefined;
@@ -41,7 +51,7 @@ export function ControlRoom({ view, status, send, serverNow }: Props) {
 
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), toast.kind === "error" ? 6000 : 3000);
+    const t = setTimeout(() => setToast(null), toast.ms ?? (toast.kind === "error" ? 6000 : 3000));
     return () => clearTimeout(t);
   }, [toast]);
 
@@ -53,14 +63,32 @@ export function ControlRoom({ view, status, send, serverNow }: Props) {
       <ConnectionBanner status={status} />
       <TopBar view={view} run={run} status={status} />
       <NowPanel view={view} run={run} serverNow={serverNow} />
+      {!drafting && view.draw.phase === "complete" && (
+        <ScoringPanel view={view} run={run} notify={notify} serverNow={serverNow} />
+      )}
       <div className="host__grid">
         <GuestsPanel view={view} run={run} />
         {drafting ? <DrawSetup view={view} run={run} /> : <TeamsPanel view={view} run={run} />}
       </div>
-      <ActivityLog view={view} />
+      {drafting && <ScoringPanel view={view} run={run} notify={notify} serverNow={serverNow} />}
+      <footer className="host__footer">
+        <ActivityLog view={view} />
+        <StartFresh run={run} />
+      </footer>
       {toast && (
         <div key={toast.id} className={`toast toast--${toast.kind}`} role={toast.kind === "error" ? "alert" : "status"}>
-          {toast.text}
+          <span>{toast.text}</span>
+          {toast.action && (
+            <button
+              className="toast__action"
+              onClick={() => {
+                toast.action!.onClick();
+                setToast(null);
+              }}
+            >
+              {toast.action.label}
+            </button>
+          )}
         </div>
       )}
     </main>
@@ -178,8 +206,36 @@ function NowPanel({ view, run, serverNow }: { view: HostView; run: Run; serverNo
     hint = `${formatClock((naming.deadline ?? 0) - serverNow())} left · ${named} of ${view.teams.length} teams named`;
     onClick = () => act("naming.close");
   } else {
-    label = "Teams are set";
-    hint = "Scoring and the run sheet arrive in the next build.";
+    const anyPoints = view.ledger.some((e) => !e.voided);
+    const onBoard = view.stage.screen === "standings" || view.stage.screen === "final";
+    if (view.blackout) {
+      label = "Reveal the final results";
+      hint = "The blackout is on, so the leaderboard is frozen. The final reveal shows every point from last place up, then the winners.";
+      onClick = anyPoints
+        ? () => {
+            if (confirm("Reveal the final results now?")) act("standings.final");
+          }
+        : null;
+    } else if (view.standingsStale && anyPoints) {
+      const changed = view.teams.filter((t) => (view.liveTotals[t.id] ?? 0) !== (view.standings?.rows.find((r) => r.teamId === t.id)?.points ?? 0)).length;
+      label = view.standings ? "Reveal the new standings" : "Reveal the first standings";
+      hint = `${changed} ${changed === 1 ? "team's score has" : "teams' scores have"} changed since the leaderboard was last shown. The TV reveals it from last place up.`;
+      onClick = () => act("standings.reveal");
+    } else if (view.standings && !onBoard) {
+      label = "Show the leaderboard";
+      hint = "The leaderboard is up to date.";
+      onClick = () => act("stage.show", { screen: "standings" });
+    } else if (!anyPoints) {
+      label = "Waiting for points";
+      hint = view.activities.length
+        ? "Choose an activity under Scoring, show it on the TV, then award points."
+        : "Add your first activity under Scoring, then award points as you play.";
+    } else {
+      label = view.standings?.final ? "Final results are on the TV" : "Leaderboard is up to date";
+      hint = view.standings?.final
+        ? "Award a tie-breaker and reveal the final results again if you need to."
+        : "Award more points, and the next reveal button appears here.";
+    }
   }
 
   return (
@@ -520,10 +576,16 @@ function TeamsPanel({ view, run }: { view: HostView; run: Run }) {
       </div>
 
       <div className="danger">
-        <button className="btn btn--ghost btn--danger" onClick={() => setResetOpen(true)}>
-          Reset the draw
-        </button>
-        <span className="host__muted">Clears all teams and names. Only use this before any scoring starts.</span>
+        {view.ledger.some((e) => !e.voided) ? (
+          <span className="host__muted">Points have been awarded, so the teams are fixed. Use Start fresh at the bottom of the page to rehearse again.</span>
+        ) : (
+          <>
+            <button className="btn btn--ghost btn--danger" onClick={() => setResetOpen(true)}>
+              Reset the draw
+            </button>
+            <span className="host__muted">Clears all teams and names. Only possible before any points are awarded.</span>
+          </>
+        )}
       </div>
       {resetOpen && <ResetDialog onClose={() => setResetOpen(false)} run={run} />}
     </section>
@@ -736,5 +798,62 @@ function ActivityLog({ view }: { view: HostView }) {
         ))}
       </ol>
     </details>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+function StartFresh({ run }: { run: Run }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [clearGuests, setClearGuests] = useState(false);
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (open) ref.current?.showModal();
+  }, [open]);
+  return (
+    <>
+      <button className="btn btn--ghost btn--danger btn--small" onClick={() => setOpen(true)}>
+        Start fresh
+      </button>
+      {open && (
+        <dialog
+          ref={ref}
+          className="dialog"
+          onClose={() => {
+            setOpen(false);
+            setText("");
+            setClearGuests(false);
+          }}
+        >
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const ok = await run("event.startFresh", { confirm: text, clearGuests }, "Started fresh");
+              if (ok !== undefined) ref.current?.close();
+            }}
+          >
+            <h2 className="dialog__title">Start fresh?</h2>
+            <p>This clears the team draw, team names, every point and the leaderboard, and removes test guests. Your activities and the guest link stay the same.</p>
+            <label className="check">
+              <input type="checkbox" checked={clearGuests} onChange={(e) => setClearGuests(e.target.checked)} />
+              <span>Also remove everyone from the guest list, with their photos</span>
+            </label>
+            <label className="field">
+              <span className="field__label">Type START FRESH to confirm</span>
+              <input className="input" value={text} onChange={(e) => setText(e.target.value)} autoFocus />
+            </label>
+            <div className="dialog__actions">
+              <button type="button" className="btn btn--ghost" onClick={() => ref.current?.close()}>
+                Keep everything
+              </button>
+              <button className="btn btn--danger-solid" disabled={text !== "START FRESH"}>
+                Start fresh
+              </button>
+            </div>
+          </form>
+        </dialog>
+      )}
+    </>
   );
 }

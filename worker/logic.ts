@@ -11,52 +11,31 @@ import {
   SPIN_MS,
   TEAM_BADGES,
   TEAM_COLOURS,
-  type Role,
 } from "../shared/types";
+import {
+  findPlayer,
+  findTeam,
+  requireComplete,
+  str,
+  UserError,
+  type ActionResult,
+  type Actor,
+  type Handler,
+  type Payload,
+} from "./common";
 import { pick, randomDigits, randomToken, shuffle } from "./random";
-import { freshDraw, newId, type RevealEvent, type ServerPlayer, type ServerState, type ServerTeam } from "./state";
+import { scoringHost } from "./scoring";
+import { freshDraw, freshStage, newId, type RevealEvent, type ServerPlayer, type ServerState, type ServerTeam } from "./state";
 import { TEAM_NAMES } from "./teamNames";
 
-export class UserError extends Error {}
-
-export interface Actor {
-  role: Role;
-  playerId: string | null;
-}
-
-export interface ActionResult {
-  data?: unknown;
-  welcome?: { token: string; playerId: string };
-  audit?: [action: string, detail: string];
-  /** Set to schedule the Durable Object alarm; null clears it. */
-  alarmAt?: number | null;
-  /** True when the request was valid but changed nothing (e.g. a duplicate spin). */
-  noChange?: boolean;
-  /** Guests whose stored photos should be deleted. */
-  deletePhotos?: string[];
-}
-
-type Payload = Record<string, unknown>;
-type Handler = (s: ServerState, actor: Actor, p: Payload, now: number) => ActionResult;
+export { UserError, findPlayer, findTeam };
+export type { Actor, ActionResult };
 
 const REJOIN_MS = 10 * 60_000;
 const ALL_BADGES: readonly string[] = [...TEAM_BADGES, ...EXTRA_BADGES];
 
 // ---------------------------------------------------------------------------
 // Payload helpers
-
-function str(p: Payload, key: string, opts: { max?: number; optional?: boolean; allowEmpty?: boolean } = {}): string {
-  const v = p[key];
-  if (v === undefined || v === null) {
-    if (opts.optional) return "";
-    throw new UserError(`Missing ${key}.`);
-  }
-  if (typeof v !== "string") throw new UserError(`${key} must be text.`);
-  const t = v.trim().replace(/\s+/g, " ");
-  if (!t && !opts.allowEmpty && !opts.optional) throw new UserError(`${key} can't be empty.`);
-  if (opts.max && t.length > opts.max) throw new UserError(`${key} must be ${opts.max} characters or fewer.`);
-  return t;
-}
 
 function cleanName(raw: unknown): string {
   if (typeof raw !== "string") throw new UserError("Enter a name.");
@@ -73,18 +52,6 @@ function avatar(raw: unknown): string {
 
 // ---------------------------------------------------------------------------
 // Lookups
-
-export function findPlayer(s: ServerState, id: unknown): ServerPlayer {
-  const p = s.players.find((x) => x.id === id);
-  if (!p) throw new UserError("That guest no longer exists.");
-  return p;
-}
-
-export function findTeam(s: ServerState, id: unknown): ServerTeam {
-  const t = s.teams.find((x) => x.id === id);
-  if (!t) throw new UserError("That team no longer exists.");
-  return t;
-}
 
 function nameTaken(s: ServerState, name: string, exceptId?: string): boolean {
   const n = name.toLocaleLowerCase();
@@ -114,9 +81,6 @@ function requireDraft(s: ServerState, what: string) {
   if (s.draw.phase !== "draft") throw new UserError(`${what} isn't possible once the draw is locked.`);
 }
 
-function requireComplete(s: ServerState) {
-  if (s.draw.phase !== "complete") throw new UserError("Finish the team draw first.");
-}
 
 // ---------------------------------------------------------------------------
 // Team names
@@ -223,13 +187,48 @@ function skipDraw(s: ServerState, now: number): ActionResult {
 function resetDraw(s: ServerState, p: Payload): ActionResult {
   if (p.confirm !== "RESET") throw new UserError('Type RESET to confirm.');
   if (s.draw.phase === "draft") throw new UserError("The draw hasn't been locked yet.");
-  // Later blocks: refuse once any points exist.
+  if (s.ledger.some((e) => !e.voided)) {
+    throw new UserError("Points have been awarded, so the teams are fixed. Use Start fresh to rehearse again.");
+  }
   for (const pl of s.players) pl.teamId = null;
   s.teams = [];
   s.offeredNames = [];
   s.draw = freshDraw(s.draw.revealMode, s.draw.oddFallback);
   s.naming = { phase: "idle", deadline: null };
+  clearScores(s);
   return { audit: ["draw.reset", "Draw reset to draft"], alarmAt: null };
+}
+
+/** Clears every point, reveal and TV screen, but keeps the planned activities. */
+function clearScores(s: ServerState): void {
+  s.ledger = [];
+  s.snapshots = [];
+  s.blackout = false;
+  s.stage = freshStage();
+  for (const a of s.activities) a.resultsShown = false;
+}
+
+/**
+ * Clears a rehearsal: the draw, teams, points and reveals. Test guests always
+ * go; real guests go too if asked. The guest link stays the same.
+ */
+function startFresh(s: ServerState, p: Payload): ActionResult {
+  if (p.confirm !== "START FRESH") throw new UserError("Type START FRESH to confirm.");
+  const clearGuests = p.clearGuests === true;
+  const removed = s.players.filter((pl) => pl.isTest || clearGuests);
+  s.players = s.players.filter((pl) => !removed.includes(pl));
+  for (const pl of s.players) {
+    pl.teamId = null;
+    if (pl.status === "left") pl.status = pl.token ? "joined" : "expected";
+  }
+  s.teams = [];
+  s.offeredNames = [];
+  s.draw = freshDraw(s.draw.revealMode, null);
+  s.naming = { phase: "idle", deadline: null };
+  s.intermission = false;
+  clearScores(s);
+  const detail = clearGuests ? "Started fresh and cleared the guest list" : "Started fresh (guest list kept)";
+  return { audit: ["event.startFresh", detail], alarmAt: null, deletePhotos: removed.map((pl) => pl.id) };
 }
 
 // ---------------------------------------------------------------------------
@@ -392,6 +391,7 @@ const host: Record<string, Handler> = {
   "draw.spin": (s, _a, p, now) => spin(s, p, now),
   "draw.skip": (s, _a, _p, now) => skipDraw(s, now),
   "draw.reset": (s, _a, p) => resetDraw(s, p),
+  "event.startFresh": (s, _a, p) => startFresh(s, p),
 
   "team.add": (s, _a, p) => {
     requireComplete(s);
@@ -427,7 +427,7 @@ const host: Record<string, Handler> = {
     const t = findTeam(s, p.teamId);
     const changes: string[] = [];
     if (p.name !== undefined) {
-      const name = str(p, "name", { max: 40 });
+      const name = str(p, "name", { max: 40, label: "a team name" });
       if (s.teams.some((x) => x.id !== t.id && x.name?.toLocaleLowerCase() === name.toLocaleLowerCase())) {
         throw new UserError("Another team already has that name.");
       }
@@ -435,7 +435,7 @@ const host: Record<string, Handler> = {
       changes.push(`name "${name}"`);
     }
     if (p.motto !== undefined) {
-      t.motto = str(p, "motto", { max: MOTTO_MAX, optional: true });
+      t.motto = str(p, "motto", { max: MOTTO_MAX, optional: true, label: "the motto" });
       changes.push("motto");
     }
     if (p.colour !== undefined) {
@@ -472,6 +472,7 @@ const host: Record<string, Handler> = {
     s.intermission = p.on === true;
     return { audit: ["stage.intermission", s.intermission ? "On" : "Off"] };
   },
+  ...scoringHost,
 };
 
 const player: Record<string, Handler> = {
@@ -502,7 +503,7 @@ const player: Record<string, Handler> = {
 
   "player.rejoin": (s, actor, p, now) => {
     if (actor.playerId) throw new UserError("This phone has already joined.");
-    const code = str(p, "code", { max: 8 });
+    const code = str(p, "code", { max: 8, label: "the rejoin code" });
     const pl = s.players.find((x) => x.rejoinCode === code && (x.rejoinExpires ?? 0) > now);
     if (!pl) throw new UserError("That code isn't valid. Ask the host for a new one.");
     pl.token = randomToken();
@@ -532,7 +533,7 @@ const player: Record<string, Handler> = {
     if (s.naming.phase !== "open") throw new UserError("Team naming isn't open.");
     const t = playerTeam(s, actor);
     if (t.name) throw new UserError(`Your team is already ${t.name}.`);
-    const name = str(p, "name");
+    const name = str(p, "name", { label: "a team name" });
     if (!t.suggestions.includes(name)) throw new UserError("Pick one of your team's suggestions.");
     t.name = name;
     const allNamed = s.teams.every((x) => x.name);
@@ -555,7 +556,7 @@ const player: Record<string, Handler> = {
 
   "team.motto": (s, actor, p) => {
     const t = playerTeam(s, actor);
-    t.motto = str(p, "motto", { max: MOTTO_MAX, optional: true });
+    t.motto = str(p, "motto", { max: MOTTO_MAX, optional: true, label: "the motto" });
     return {};
   },
 };

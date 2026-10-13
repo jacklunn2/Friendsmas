@@ -13,6 +13,11 @@ export type DrawPhase = "draft" | "locked" | "revealing" | "complete";
 export type NamingPhase = "idle" | "open" | "closed";
 export type Role = "host" | "stage" | "player";
 
+export type ActivityKind = "team" | "individual";
+export type ScoringScheme = "placement" | "perCorrect" | "judged";
+export type EntryKind = "award" | "bonus" | "penalty";
+export type StageScreen = "teams" | "activity" | "results" | "standings" | "final";
+
 export interface PublicPlayer {
   id: string;
   name: string;
@@ -67,6 +72,61 @@ export interface NamingView {
   deadline: number | null;
 }
 
+export interface ActivityView {
+  id: string;
+  name: string;
+  kind: ActivityKind;
+  scoring: ScoringScheme;
+  /** Points for 1st, 2nd, 3rd… when scoring is "placement". */
+  placements: number[];
+  /** Points per correct answer when scoring is "perCorrect". */
+  perCorrect: number;
+  description: string;
+  /** Default length of the on-screen timer, or 0 for none. */
+  timerSeconds: number;
+  resultsShown: boolean;
+}
+
+export interface TimerView {
+  /** Set while running. */
+  endsAt: number | null;
+  /** Set while paused. */
+  remainingMs: number | null;
+  durationMs: number;
+}
+
+export interface StageStateView {
+  screen: StageScreen;
+  activityId: string | null;
+  timer: TimerView | null;
+}
+
+export interface StandingsRow {
+  teamId: string;
+  points: number;
+  /** 1-based; tied teams share a rank. */
+  rank: number;
+  tied: boolean;
+  /** Points and rank at the previous reveal, if the team was on it. */
+  prevPoints: number | null;
+  prevRank: number | null;
+}
+
+export interface StandingsView {
+  /** Increases with every reveal, so screens can replay the animation. */
+  seq: number;
+  at: number;
+  final: boolean;
+  /** Best first. */
+  rows: StandingsRow[];
+}
+
+export interface ResultsView {
+  activityId: string;
+  /** Points each team earned in the activity, best first. Only revealed points. */
+  rows: { teamId: string; points: number; rank: number; earners: { playerId: string; points: number }[] }[];
+}
+
 export interface PublicView {
   version: number;
   serverTime: number;
@@ -76,6 +136,14 @@ export interface PublicView {
   draw: DrawView;
   naming: NamingView;
   intermission: boolean;
+  activities: ActivityView[];
+  stage: StageStateView;
+  /** The last revealed leaderboard, or null before the first reveal. */
+  standings: StandingsView | null;
+  /** While on, standings are kept secret until the final reveal. */
+  blackout: boolean;
+  /** Results of the activity on the TV, when the TV is showing results. */
+  results: ResultsView | null;
 }
 
 export interface MyTeamView extends PublicTeam {
@@ -87,6 +155,8 @@ export interface PlayerView extends PublicView {
   role: "player";
   me: PublicPlayer | null;
   myTeam: MyTeamView | null;
+  /** This guest's share of their team's points at the last reveal. */
+  myPoints: number;
   /** Names on the guest list that can still be claimed. */
   claimable: { id: string; name: string }[];
 }
@@ -111,6 +181,22 @@ export interface AuditEntry {
   detail: string;
 }
 
+export interface LedgerEntryView {
+  id: string;
+  at: number;
+  teamId: string;
+  playerId: string | null;
+  activityId: string | null;
+  points: number;
+  reason: string;
+  kind: EntryKind;
+  /** 1-based placing, for placement awards. */
+  placement: number | null;
+  voided: boolean;
+  /** False until the host reveals it (activity results or a standings reveal). */
+  revealed: boolean;
+}
+
 export interface HostView extends PublicView {
   role: "host";
   roster: HostPlayer[];
@@ -118,6 +204,12 @@ export interface HostView extends PublicView {
   /** Team names suggested to each team, so the host can see what's on offer. */
   suggestions: Record<string, string[]>;
   spinCooldownUntil: number | null;
+  /** Every score change, newest first. */
+  ledger: LedgerEntryView[];
+  /** Current totals including points not yet revealed. */
+  liveTotals: Record<string, number>;
+  /** True when the live totals differ from the last revealed leaderboard. */
+  standingsStale: boolean;
 }
 
 export type AnyView = PlayerView | StageView | HostView;
@@ -147,6 +239,10 @@ export const FINAL_REVEAL_MS = 5600;
 export const NAMING_MS = 120_000;
 export const MOTTO_MAX = 60;
 export const NAME_MAX = 24;
+export const ACTIVITY_NAME_MAX = 40;
+export const REASON_MAX = 60;
+export const MAX_POINTS = 1000;
+export const UNDO_MS = 10_000;
 
 export const TEAM_COLOURS = [
   "#e2445c", // cranberry
@@ -175,4 +271,22 @@ export function photoUrl(p: { id: string; photo: number | null }, eventCode: str
 
 export function teamDisplayName(team: { name: string | null; order: number }): string {
   return team.name ?? `Team ${team.order + 1}`;
+}
+
+export function ordinal(n: number): string {
+  const v = n % 100;
+  if (v >= 11 && v <= 13) return `${n}th`;
+  return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+}
+
+export function placeLabel(row: { rank: number; tied: boolean }): string {
+  return `${row.tied ? "=" : ""}${ordinal(row.rank)}`;
+}
+
+export function formatPoints(n: number): string {
+  return `${n} ${Math.abs(n) === 1 ? "pt" : "pts"}`;
+}
+
+export function signed(n: number): string {
+  return n > 0 ? `+${n}` : n < 0 ? `\u2212${Math.abs(n)}` : "0";
 }
