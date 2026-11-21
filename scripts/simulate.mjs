@@ -477,6 +477,46 @@ async function main() {
   check(true, "The Grand Prize and the hall of fame go on the TV");
   for (const w of host.view.prize.pastWinners.filter((x) => x.caption === "2025: Rehearsal Reindeer")) await host.req("prize.winner.remove", { id: w.id });
 
+  // --- Block 4: videos, uploaded in chunks and streamed with Range requests
+  const auth = { authorization: `Bearer ${good.body.token}` };
+  const clip = new Uint8Array(3_200_000).map((_, i) => (i * 7) % 251);
+  const tooBig = await fetch(`${BASE}/api/video`, { method: "POST", headers: { ...auth, "content-type": "application/json" }, body: JSON.stringify({ name: "x", type: "video/mp4", size: 200 * 1024 * 1024 }) });
+  check(tooBig.status === 400, "a video over 80 MB is refused");
+  const notHost = await fetch(`${BASE}/api/video`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "x", type: "video/mp4", size: 1000 }) });
+  check(notHost.status === 401, "only the host can upload videos");
+  const begun = await (await fetch(`${BASE}/api/video`, { method: "POST", headers: { ...auth, "content-type": "application/json" }, body: JSON.stringify({ name: "Rehearsal clip", type: "video/mp4", size: clip.length, durationMs: 3000 }) })).json();
+  check(begun.chunks === Math.ceil(clip.length / begun.chunkSize), `upload split into ${begun.chunks} chunks`);
+  const short = await fetch(`${BASE}/api/video/${begun.id}/chunk/0`, { method: "PUT", headers: auth, body: clip.slice(0, 10) });
+  check(short.status === 400, "a chunk of the wrong size is refused");
+  const unfinished = await fetch(`${BASE}/api/video/${begun.id}/done`, { method: "POST", headers: auth });
+  check(unfinished.status === 400, "an unfinished upload can't be completed");
+  for (let i = 0; i < begun.chunks; i++) {
+    const r = await fetch(`${BASE}/api/video/${begun.id}/chunk/${i}`, { method: "PUT", headers: auth, body: clip.slice(i * begun.chunkSize, (i + 1) * begun.chunkSize) });
+    if (!r.ok) check(false, `chunk ${i} uploaded`);
+  }
+  const finished = await fetch(`${BASE}/api/video/${begun.id}/done`, { method: "POST", headers: auth });
+  check(finished.ok, "the upload completes");
+  await host.until((v) => v.videos.some((x) => x.id === begun.id));
+  const whole = new Uint8Array(await (await fetch(`${BASE}/api/video/${begun.id}?c=${code}`)).arrayBuffer());
+  check(whole.length === clip.length && whole.every((b, i) => b === clip[i]), "the whole clip streams back intact");
+  const ranged = await fetch(`${BASE}/api/video/${begun.id}?c=${code}`, { headers: { range: "bytes=1499990-1500009" } });
+  const part = new Uint8Array(await ranged.arrayBuffer());
+  check(ranged.status === 206 && part.length === 20 && part.every((b, i) => b === clip[1499990 + i]), "a range across two chunks streams correctly");
+  const noCode = await fetch(`${BASE}/api/video/${begun.id}`);
+  check(noCode.status === 404, "videos need the event link");
+  await host.req("activity.video", { activityId: charades, videoId: begun.id });
+  await host.req("stage.show", { screen: "activity", activityId: charades });
+  await stage.until((v) => v.video?.videoId === begun.id && v.video.playing);
+  check(true, "an activity's clip plays on the TV when it starts");
+  await host.req("video.pause");
+  await stage.until((v) => v.video && !v.video.playing);
+  await host.req("video.skip");
+  await stage.until((v) => !v.video && v.stage.screen === "activity");
+  check(true, "the host pauses and skips the clip");
+  await host.req("video.delete", { id: begun.id });
+  const gone = await fetch(`${BASE}/api/video/${begun.id}?c=${code}`);
+  check(gone.status === 404, "a deleted clip is gone from storage");
+
   for (const c of [host, stage, intruder, badPhone, dupe, lou, avaAgain, ...Object.values(phones)]) {
     try {
       c.close();

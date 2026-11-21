@@ -30,6 +30,7 @@ import {
   type Payload,
 } from "./common";
 import { quizImages } from "./quiz";
+import { startActivityVideo } from "./show";
 import { freshQuiz, newId, type Activity, type LedgerEntry, type ServerState, type Snapshot } from "./state";
 
 const DESCRIPTION_MAX = 1000;
@@ -296,8 +297,10 @@ export const scoringHost: Record<string, Handler> = {
   // -------------------------------------------------------------------------
   // The TV
 
-  "stage.show": (s, _a, p) => {
+  "stage.show": (s, _a, p, now) => {
     const screen = p.screen;
+    // Changing screens stops any clip; an activity with a clip plays it first.
+    s.video = null;
     if (screen === "teams") {
       requireComplete(s);
       s.stage = { screen: "teams", activityId: null, timer: null };
@@ -333,6 +336,7 @@ export const scoringHost: Record<string, Handler> = {
       if (a.format === "poll") throw new UserError("Use Start the poll for polls.");
       const timer = a.timerSeconds ? { endsAt: null, remainingMs: a.timerSeconds * 1000, durationMs: a.timerSeconds * 1000 } : null;
       s.stage = { screen: "activity", activityId: a.id, timer };
+      startActivityVideo(s, a.id, now);
       return { audit: ["stage.show", `${a.name} on the TV`] };
     }
     throw new UserError("Choose what to show on the TV.");

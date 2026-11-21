@@ -29,7 +29,7 @@ import { pollsHost, pollsPlayer } from "./polls";
 import { autoAssignMission, clearMissionAssignments, missionsHost, missionsPlayer } from "./missions";
 import { quizAlarm, quizHost, quizPlayer } from "./quiz";
 import { scoringHost } from "./scoring";
-import { showHost } from "./show";
+import { showHost, videoAlarm, videoEndsAt } from "./show";
 import { freshDraw, freshQuiz, freshStage, newId, type RevealEvent, type ServerPlayer, type ServerState, type ServerTeam } from "./state";
 
 export { UserError, findPlayer, findTeam };
@@ -249,6 +249,7 @@ export function onAlarm(s: ServerState, now: number): boolean {
     changed = true;
   }
   if (quizAlarm(s, now)) changed = true;
+  if (videoAlarm(s, now)) changed = true;
   return changed;
 }
 
@@ -257,6 +258,7 @@ export function nextAlarmAt(s: ServerState): number | null {
   const times = [
     s.naming.phase === "open" ? s.naming.deadline : null,
     s.quiz.phase === "open" ? s.quiz.endsAt : null,
+    videoEndsAt(s),
   ].filter((t): t is number => t !== null);
   return times.length ? Math.min(...times) : null;
 }

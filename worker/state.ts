@@ -1,5 +1,7 @@
 import type {
   AgendaItem,
+  VideoInfo,
+  VideoPlayback,
   PrizeView,
   PollKind,
   PollOptionsKind,
@@ -137,6 +139,7 @@ export interface Activity {
   pollKind?: PollKind;
   foolBonus?: number;
   polls?: PollQuestion[];
+  videoId?: string | null;
 }
 
 export interface PollQuestion {
@@ -206,6 +209,9 @@ export interface ServerState {
   agenda: AgendaItem[];
   missions: MissionsState;
   prize: PrizeView;
+  videos: VideoInfo[];
+  video: VideoPlayback | null;
+  videoSeq: number;
 }
 
 export interface MissionAssignment {
@@ -258,6 +264,9 @@ export function migrate(s: ServerState): ServerState {
   s.agenda ??= [];
   s.missions ??= freshMissions(s);
   s.prize ??= { trophyImageId: null, pastWinners: [] };
+  s.videos ??= [];
+  s.video ??= null;
+  s.videoSeq ??= 0;
   // Block 4: teams type their own names; suggestions and mottos are gone.
   delete (s as { offeredNames?: unknown }).offeredNames;
   for (const t of s.teams) {
@@ -305,6 +314,9 @@ export function freshState(now: number): ServerState {
     agenda: [],
     missions: { list: [], autoOnJoin: false, assigned: {} },
     prize: { trophyImageId: null, pastWinners: [] },
+    videos: [],
+    video: null,
+    videoSeq: 0,
   };
   s.missions = freshMissions(s);
   return s;

@@ -387,6 +387,7 @@ function InGame({ view, send, serverNow, getToken, code }: InGameProps) {
 
   return (
     <section className="phone__team" style={teamStyle(team)}>
+      {view.video && <p className="phone__tv">📺 Eyes on the TV</p>}
       {phase === "complete" && <NowPlaying view={view} serverNow={serverNow} />}
       {phase === "complete" && view.stage.screen === "quiz" && <PhoneQuiz view={view} send={send} serverNow={serverNow} />}
       {phase === "complete" && view.stage.screen === "poll" && <PhonePoll view={view} send={send} serverNow={serverNow} />}

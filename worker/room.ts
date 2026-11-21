@@ -3,9 +3,18 @@
 // spin or two simultaneous awards can never collide.
 
 import { DurableObject } from "cloudflare:workers";
-import { IMAGE_MAX_BYTES, PHOTO_MAX_BYTES, type AuditEntry, type ClientRequest, type Role, type ServerMessage } from "../shared/types";
+import {
+  IMAGE_MAX_BYTES,
+  PHOTO_MAX_BYTES,
+  VIDEO_CHUNK_BYTES,
+  type AuditEntry,
+  type ClientRequest,
+  type Role,
+  type ServerMessage,
+} from "../shared/types";
 import { nextAlarmAt, onAlarm, runAction, UserError, type Actor } from "./logic";
 import { randomToken } from "./random";
+import { checkVideoUpload, registerVideo } from "./show";
 import { freshState, migrate, type ServerState } from "./state";
 import { hostView, playerView, stageView } from "./views";
 
@@ -42,6 +51,14 @@ export class EventRoom extends DurableObject<Env> {
       ctx.storage.sql.exec(
         "CREATE TABLE IF NOT EXISTS images (id TEXT PRIMARY KEY, type TEXT NOT NULL, data BLOB NOT NULL, created_at INTEGER NOT NULL)",
       );
+      // Video clips, uploaded in chunks of up to VIDEO_CHUNK_BYTES (one row each,
+      // under SQLite's 2 MB limit). A clip only joins the event once complete.
+      ctx.storage.sql.exec(
+        "CREATE TABLE IF NOT EXISTS videos (id TEXT PRIMARY KEY, type TEXT NOT NULL, size INTEGER NOT NULL, chunks INTEGER NOT NULL, name TEXT NOT NULL, duration_ms INTEGER, complete INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)",
+      );
+      ctx.storage.sql.exec(
+        "CREATE TABLE IF NOT EXISTS video_chunks (video_id TEXT NOT NULL, idx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (video_id, idx))",
+      );
       const stored = await ctx.storage.get<ServerState>("state");
       if (stored) {
         this.state = migrate(stored);
@@ -63,6 +80,13 @@ export class EventRoom extends DurableObject<Env> {
     if (url.pathname === "/api/image" && request.method === "POST") return this.uploadImage(request);
     const image = url.pathname.match(/^\/api\/image\/([A-Za-z0-9_-]+)$/);
     if (image && request.method === "GET") return this.serveImage(image[1], url);
+    if (url.pathname === "/api/video" && request.method === "POST") return this.beginVideo(request);
+    const chunk = url.pathname.match(/^\/api\/video\/([A-Za-z0-9_-]+)\/chunk\/(\d+)$/);
+    if (chunk && request.method === "PUT") return this.videoChunk(request, chunk[1], Number(chunk[2]));
+    const done = url.pathname.match(/^\/api\/video\/([A-Za-z0-9_-]+)\/done$/);
+    if (done && request.method === "POST") return this.finishVideo(request, done[1]);
+    const video = url.pathname.match(/^\/api\/video\/([A-Za-z0-9_-]+)$/);
+    if (video && request.method === "GET") return this.serveVideo(video[1], url, request);
     const photo = url.pathname.match(/^\/api\/photo\/([a-z0-9]+)$/);
     if (photo && request.method === "GET") return this.servePhoto(photo[1], url);
     return Response.json({ error: "Not found" }, { status: 404 });
@@ -179,6 +203,155 @@ export class EventRoom extends DurableObject<Env> {
     return new Response(row.data, { headers: { "content-type": row.type, "cache-control": "private, max-age=31536000, immutable" } });
   }
 
+  // -------------------------------------------------------------------------
+  // Videos
+
+  private isHost(request: Request): boolean {
+    const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+    return !!token && this.state.hostTokens.some((t) => t.token === token);
+  }
+
+  /** Starts an upload: checks the size and type, and returns an id to send chunks to. */
+  private async beginVideo(request: Request): Promise<Response> {
+    if (!this.isHost(request)) return Response.json({ error: "Sign in to the control room again." }, { status: 401 });
+    let body: { name?: unknown; type?: unknown; size?: unknown; durationMs?: unknown } = {};
+    try {
+      body = await request.json();
+    } catch {
+      // checked below
+    }
+    const size = Number(body.size);
+    const type = typeof body.type === "string" ? body.type : "";
+    try {
+      checkVideoUpload(this.state, size, type);
+    } catch (e) {
+      return Response.json({ error: (e as Error).message }, { status: 400 });
+    }
+    // Forget uploads that were abandoned part-way.
+    const stale = this.ctx.storage.sql
+      .exec<{ id: string }>("SELECT id FROM videos WHERE complete = 0 AND created_at < ?", Date.now() - 2 * 3600_000)
+      .toArray();
+    this.deleteVideos(stale.map((r) => r.id));
+    const id = randomToken(12);
+    const chunks = Math.ceil(size / VIDEO_CHUNK_BYTES);
+    const duration = Number(body.durationMs);
+    this.ctx.storage.sql.exec(
+      "INSERT INTO videos (id, type, size, chunks, name, duration_ms, complete, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?)",
+      id,
+      type,
+      size,
+      chunks,
+      typeof body.name === "string" ? body.name.slice(0, 200) : "Video",
+      Number.isFinite(duration) && duration > 0 ? Math.round(duration) : null,
+      Date.now(),
+    );
+    return Response.json({ id, chunkSize: VIDEO_CHUNK_BYTES, chunks });
+  }
+
+  private videoRow(id: string) {
+    return this.ctx.storage.sql
+      .exec<{ id: string; type: string; size: number; chunks: number; name: string; duration_ms: number | null; complete: number; created_at: number }>(
+        "SELECT * FROM videos WHERE id = ?",
+        id,
+      )
+      .toArray()[0];
+  }
+
+  private async videoChunk(request: Request, id: string, idx: number): Promise<Response> {
+    if (!this.isHost(request)) return Response.json({ error: "Sign in to the control room again." }, { status: 401 });
+    const row = this.videoRow(id);
+    if (!row || row.complete) return Response.json({ error: "That upload has expired. Start again." }, { status: 404 });
+    if (!Number.isInteger(idx) || idx < 0 || idx >= row.chunks) return Response.json({ error: "Unexpected part of the video." }, { status: 400 });
+    const data = await request.arrayBuffer();
+    const expected = idx === row.chunks - 1 ? row.size - idx * VIDEO_CHUNK_BYTES : VIDEO_CHUNK_BYTES;
+    if (data.byteLength !== expected) return Response.json({ error: "Part of the video went missing. Try again." }, { status: 400 });
+    this.ctx.storage.sql.exec("INSERT OR REPLACE INTO video_chunks (video_id, idx, data) VALUES (?, ?, ?)", id, idx, data);
+    return Response.json({ ok: true });
+  }
+
+  /** Checks every chunk arrived, then adds the clip to the event. */
+  private async finishVideo(request: Request, id: string): Promise<Response> {
+    if (!this.isHost(request)) return Response.json({ error: "Sign in to the control room again." }, { status: 401 });
+    const row = this.videoRow(id);
+    if (!row) return Response.json({ error: "That upload has expired. Start again." }, { status: 404 });
+    if (row.complete) return Response.json({ id });
+    const got = this.ctx.storage.sql
+      .exec<{ n: number; bytes: number }>("SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(data)), 0) AS bytes FROM video_chunks WHERE video_id = ?", id)
+      .toArray()[0];
+    if (got.n !== row.chunks || got.bytes !== row.size) return Response.json({ error: "Some of the video is missing. Try uploading it again." }, { status: 400 });
+    const draft = structuredClone(this.state);
+    try {
+      checkVideoUpload(draft, row.size, row.type);
+    } catch (e) {
+      this.deleteVideos([id]);
+      return Response.json({ error: (e as Error).message }, { status: 400 });
+    }
+    registerVideo(draft, { id, name: row.name, size: row.size, type: row.type, durationMs: row.duration_ms, createdAt: Date.now() });
+    this.ctx.storage.sql.exec("UPDATE videos SET complete = 1 WHERE id = ?", id);
+    draft.version += 1;
+    this.state = draft;
+    await this.ctx.storage.put("state", this.state);
+    this.audit("video.add", `Uploaded ${row.name}`);
+    this.broadcast();
+    return Response.json({ id });
+  }
+
+  /** Streams a clip, a chunk at a time, honouring Range requests so the TV can seek. */
+  private serveVideo(id: string, url: URL, request: Request): Response {
+    if (url.searchParams.get("c") !== this.state.eventCode) return new Response("Not found", { status: 404 });
+    const row = this.videoRow(id);
+    if (!row || !row.complete) return new Response("Not found", { status: 404 });
+    let start = 0;
+    let end = row.size - 1;
+    const range = request.headers.get("range")?.match(/^bytes=(\d*)-(\d*)$/);
+    if (range) {
+      if (range[1] === "" && range[2] !== "") {
+        start = Math.max(0, row.size - Number(range[2]));
+      } else {
+        start = Number(range[1] || 0);
+        if (range[2] !== "") end = Math.min(end, Number(range[2]));
+      }
+      if (start > end || start >= row.size) {
+        return new Response(null, { status: 416, headers: { "content-range": `bytes */${row.size}` } });
+      }
+    }
+    const sql = this.ctx.storage.sql;
+    let pos = start;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (pos > end) {
+          controller.close();
+          return;
+        }
+        const idx = Math.floor(pos / VIDEO_CHUNK_BYTES);
+        const data = sql.exec<{ data: ArrayBuffer }>("SELECT data FROM video_chunks WHERE video_id = ? AND idx = ?", id, idx).toArray()[0]?.data;
+        if (!data) {
+          controller.error(new Error("missing chunk"));
+          return;
+        }
+        const from = pos - idx * VIDEO_CHUNK_BYTES;
+        const to = Math.min(data.byteLength, end - idx * VIDEO_CHUNK_BYTES + 1);
+        controller.enqueue(new Uint8Array(data.slice(from, to)));
+        pos = idx * VIDEO_CHUNK_BYTES + to;
+      },
+    });
+    const headers: Record<string, string> = {
+      "content-type": row.type,
+      "content-length": String(end - start + 1),
+      "accept-ranges": "bytes",
+      "cache-control": "private, max-age=31536000, immutable",
+    };
+    if (range) headers["content-range"] = `bytes ${start}-${end}/${row.size}`;
+    return new Response(body, { status: range ? 206 : 200, headers });
+  }
+
+  private deleteVideos(ids: string[]): void {
+    for (const id of ids) {
+      this.ctx.storage.sql.exec("DELETE FROM video_chunks WHERE video_id = ?", id);
+      this.ctx.storage.sql.exec("DELETE FROM videos WHERE id = ?", id);
+    }
+  }
+
   private deletePhotos(ids: string[]): void {
     for (const id of ids) this.ctx.storage.sql.exec("DELETE FROM photos WHERE player_id = ?", id);
   }
@@ -264,6 +437,7 @@ export class EventRoom extends DurableObject<Env> {
       if (result.audit) this.audit(result.audit[0], result.audit[1], now);
       if (result.deletePhotos) this.deletePhotos(result.deletePhotos);
       if (result.deleteImages) this.deleteImages(result.deleteImages);
+      if (result.deleteVideos) this.deleteVideos(result.deleteVideos);
       await this.scheduleAlarm();
       if (result.welcome) {
         ws.serializeAttachment({

@@ -98,6 +98,8 @@ export interface ActivityView {
   pollKind: PollKind;
   /** "Who wrote this?" only: bonus for the writers who fool the most people. */
   foolBonus: number;
+  /** A clip that plays on the TV, with sound, when the activity starts. */
+  videoId: string | null;
 }
 
 /** A quiz question as the host edits it. Never sent to guests or the TV. */
@@ -240,6 +242,8 @@ export interface PublicView {
   /** The day's running order, written by the host, for the welcome screen. */
   agenda: AgendaItem[];
   prize: PrizeView;
+  /** A clip playing on the TV, over whatever screen is showing. */
+  video: VideoPlayback | null;
 }
 
 export interface AgendaItem {
@@ -260,6 +264,41 @@ export const MAX_PAST_WINNERS = 30;
 export interface PrizeView {
   trophyImageId: string | null;
   pastWinners: PastWinner[];
+}
+
+// ---------------------------------------------------------------------------
+// Videos (Block 4). Stored in the event's own storage, in chunks.
+
+export const VIDEO_MAX_BYTES = 80 * 1024 * 1024;
+export const VIDEO_TOTAL_MAX_BYTES = 1024 * 1024 * 1024;
+/** Each upload request carries one chunk; each chunk is one stored row. */
+export const VIDEO_CHUNK_BYTES = 1_500_000;
+export const VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"] as const;
+export const VIDEO_NAME_MAX = 60;
+
+export interface VideoInfo {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  /** From the browser that uploaded it; null if it couldn't tell. */
+  durationMs: number | null;
+  createdAt: number;
+}
+
+/** What the TV is playing. Position = positionMs + (now - since) while playing. */
+export interface VideoPlayback {
+  videoId: string;
+  activityId: string | null;
+  playing: boolean;
+  positionMs: number;
+  since: number;
+  /** Changes on every play/restart, so the TV knows to start again. */
+  seq: number;
+}
+
+export function videoUrl(id: string, eventCode: string): string {
+  return `/api/video/${id}?c=${eventCode}`;
 }
 
 export const AGENDA_TIME_MAX = 12;
@@ -532,6 +571,7 @@ export interface HostView extends PublicView {
   polls: Record<string, PollQuestionView[]>;
   /** Votes on the open poll question, for the presenter view. */
   pollVotes: HostPollVote[];
+  videos: VideoInfo[];
 }
 
 export type AnyView = PlayerView | StageView | HostView;

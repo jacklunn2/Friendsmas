@@ -106,6 +106,7 @@ function base(s: ServerState, viewer: Viewer, now: number): PublicView {
     quiz: quizView(s, true),
     poll: pollView(s),
     agenda: s.agenda.map((a) => ({ ...a })),
+    video: s.video ? { ...s.video } : null,
     prize: { trophyImageId: s.prize.trophyImageId, pastWinners: s.prize.pastWinners.map((w) => ({ ...w })) },
   };
 }
@@ -120,6 +121,7 @@ function activityView(a: Activity): ActivityView {
     questionCount: a.format === "poll" ? (a.polls?.length ?? 0) : (a.questions?.length ?? 0),
     pollKind: a.pollKind ?? "general",
     foolBonus: a.foolBonus ?? 0,
+    videoId: a.videoId ?? null,
     kind: a.kind,
     scoring: a.scoring,
     placements: a.placements,
@@ -232,5 +234,6 @@ export function hostView(s: ServerState, audit: AuditEntry[], now: number): Host
     missions: hostMissionsView(s),
     polls: Object.fromEntries(s.activities.filter((a) => a.format === "poll").map((a) => [a.id, (a.polls ?? []).map(pollQuestionView)])),
     pollVotes: hostPollVotes(s),
+    videos: s.videos.map((v) => ({ ...v })),
   };
 }

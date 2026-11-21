@@ -20,6 +20,7 @@ import {
 import { useTicker } from "../net";
 import { Avatar, formatClock, teamStyle } from "../ui";
 import { PollPad, pollSummary } from "./Polls";
+import { ActivityVideoPicker } from "./Show";
 import { QuizPad, quizSummary } from "./Quiz";
 
 /** Sends an action; resolves to its data (or true) on success, undefined on failure. */
@@ -310,6 +311,7 @@ function ActivityPad(props: PadProps) {
             )}
           </div>
         </header>
+        <ActivityVideoPicker activity={a} view={view} run={run} />
         {a.format === "poll" ? (
           <PollPad activity={a} view={view} run={run} players={players} serverNow={serverNow} />
         ) : (
@@ -353,6 +355,7 @@ function LiveActivityPad({ activity: a, view, run, scored, players, serverNow, o
           )}
         </div>
       </header>
+      <ActivityVideoPicker activity={a} view={view} run={run} />
 
       <div className="pad__tv">
         <button className={`btn btn--small ${onTv ? "btn--on" : "btn--secondary"}`} onClick={() => run("stage.show", { screen: "activity", activityId: a.id })}>

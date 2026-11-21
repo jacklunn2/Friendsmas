@@ -8,6 +8,7 @@ import { PollStage } from "./PollStage";
 import { GrandPrize, HallOfFame } from "./Prize";
 import { QuizStage } from "./QuizStage";
 import { ActivityIntro, ActivityResults, Standings } from "./Scoreboard";
+import { VideoOverlay } from "./VideoOverlay";
 import { Welcome } from "./Welcome";
 import { Wheel } from "./Wheel";
 
@@ -155,6 +156,7 @@ export function StageApp({ code }: { code: string }) {
         if (audioOn()) sfx.fanfare();
         setAnim((a) => (a && a.kind === "spin" ? { ...a, phase: "landed" } : a));
       }} />
+      {shown.video && <VideoOverlay view={shown} serverNow={serverNow} />}
     </main>
     </EventCodeContext.Provider>
   );

@@ -24,6 +24,7 @@ import {
 } from "../shared/types";
 import { findPlayer, int, requireComplete, UserError, type Actor, type Handler, type Payload } from "./common";
 import { allFacts } from "./guests";
+import { startActivityVideo } from "./show";
 import { newId, type Activity, type LedgerEntry, type PollQuestion, type ServerState } from "./state";
 
 const MAX_POLLS = 60;
@@ -266,7 +267,7 @@ export const pollsHost: Record<string, Handler> = {
     return {};
   },
 
-  "poll.start": (s, _a, p) => {
+  "poll.start": (s, _a, p, now) => {
     requireComplete(s);
     const poll = findPoll(s, p.activityId);
     if (!poll.polls.length) throw new UserError(`${poll.name} has no questions yet.`);
@@ -282,7 +283,9 @@ export const pollsHost: Record<string, Handler> = {
       }
       s.quiz.endsAt = null;
     }
+    const wasOn = s.stage.screen === "poll" && s.stage.activityId === poll.id;
     s.stage = { screen: "poll", activityId: poll.id, timer: null };
+    if (!wasOn) startActivityVideo(s, poll.id, now);
     return { audit: ["poll.start", `${poll.name} on the TV`] };
   },
 

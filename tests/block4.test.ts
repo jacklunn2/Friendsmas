@@ -4,6 +4,8 @@
 import { describe, expect, it } from "vitest";
 import { runAction, type Actor } from "../worker/logic";
 import { dishKey } from "../worker/guests";
+import { checkVideoUpload, registerVideo } from "../worker/show";
+import { nextAlarmAt, onAlarm } from "../worker/logic";
 import { freshState, migrate, type ServerState } from "../worker/state";
 import { hostView, playerView, stageView } from "../worker/views";
 
@@ -398,5 +400,87 @@ describe("the grand prize", () => {
     expect(stageView(s, T0).stage.screen).toBe("prize");
     runAction(s, HOST, "stage.show", { screen: "gallery" }, T0);
     expect(stageView(s, T0).stage.screen).toBe("gallery");
+  });
+});
+
+describe("videos", () => {
+  const MB = 1024 * 1024;
+  function withClip(s: ServerState, id = "vid1", durationMs: number | null = 20_000) {
+    registerVideo(s, { id, name: "  Intro   clip ", size: 10 * MB, type: "video/mp4", durationMs, createdAt: T0 });
+    return id;
+  }
+
+  it("checks uploads against the size limits", () => {
+    const s = setup(1);
+    expect(() => checkVideoUpload(s, 10 * MB, "video/avi")).toThrow(/MP4/);
+    expect(() => checkVideoUpload(s, 81 * MB, "video/mp4")).toThrow(/up to 80 MB/);
+    expect(() => checkVideoUpload(s, 0, "video/mp4")).toThrow(/empty/);
+    checkVideoUpload(s, 80 * MB, "video/mp4");
+    for (let i = 0; i < 12; i++) registerVideo(s, { id: `v${i}`, name: "x", size: 80 * MB, type: "video/mp4", durationMs: null, createdAt: T0 });
+    expect(() => checkVideoUpload(s, 80 * MB, "video/mp4")).toThrow(/1024 MB/);
+  });
+
+  it("plays an activity's clip first when it goes on the TV, and stops when the screen changes", () => {
+    const s = setup(2);
+    drawTeams(s);
+    const vid = withClip(s);
+    expect(hostView(s, [], T0).videos[0].name).toBe("Intro clip");
+    const { id } = runAction(s, HOST, "activity.create", { name: "Charades", kind: "team", scoring: "judged" }, T0).data as { id: string };
+    runAction(s, HOST, "activity.video", { activityId: id, videoId: vid }, T0);
+    runAction(s, HOST, "stage.show", { screen: "activity", activityId: id }, T0 + 100);
+    expect(stageView(s, T0).video).toMatchObject({ videoId: vid, activityId: id, playing: true, positionMs: 0, since: T0 + 100 });
+    runAction(s, HOST, "stage.show", { screen: "teams" }, T0 + 200);
+    expect(stageView(s, T0).video).toBeNull();
+  });
+
+  it("pauses, resumes, restarts and skips, keeping the TV in step", () => {
+    const s = setup(1);
+    const vid = withClip(s);
+    expect(() => runAction(s, HOST, "video.pause", {}, T0)).toThrow(/Nothing/);
+    runAction(s, HOST, "video.play", { videoId: vid }, T0);
+    const seq = s.video!.seq;
+    runAction(s, HOST, "video.pause", {}, T0 + 4000);
+    expect(s.video).toMatchObject({ playing: false, positionMs: 4000 });
+    runAction(s, HOST, "video.resume", {}, T0 + 9000);
+    expect(s.video).toMatchObject({ playing: true, positionMs: 4000, since: T0 + 9000 });
+    // It ends itself once the clip has run: 16 more seconds, plus a moment.
+    expect(nextAlarmAt(s)).toBe(T0 + 9000 + 16_000 + 1000);
+    expect(onAlarm(s, T0 + 20_000)).toBe(false);
+    expect(onAlarm(s, T0 + 26_000)).toBe(true);
+    expect(s.video).toBeNull();
+    runAction(s, HOST, "video.play", { videoId: vid }, T0 + 30_000);
+    runAction(s, HOST, "video.restart", {}, T0 + 31_000);
+    expect(s.video!.seq).toBeGreaterThan(seq);
+    runAction(s, HOST, "video.skip", {}, T0 + 32_000);
+    expect(s.video).toBeNull();
+  });
+
+  it("starts a quiz's or poll's clip only when it first goes on the TV", () => {
+    const s = setup(2);
+    drawTeams(s);
+    const vid = withClip(s, "vid1", null);
+    const { id } = runAction(s, HOST, "activity.create", { name: "Quiz", format: "quiz", kind: "team" }, T0).data as { id: string };
+    runAction(s, HOST, "quiz.question.save", { activityId: id, question: { type: "truefalse", prompt: "Snow is cold", correctIndex: 0 } }, T0);
+    runAction(s, HOST, "activity.video", { activityId: id, videoId: vid }, T0);
+    runAction(s, HOST, "quiz.start", { activityId: id }, T0);
+    expect(s.video?.videoId).toBe(vid);
+    // No duration known: no alarm; the host skips it.
+    expect(nextAlarmAt(s)).toBeNull();
+    runAction(s, HOST, "video.skip", {}, T0);
+    runAction(s, HOST, "quiz.start", { activityId: id }, T0);
+    expect(s.video).toBeNull();
+  });
+
+  it("deletes a clip everywhere it's used", () => {
+    const s = setup(1);
+    const vid = withClip(s);
+    const { id } = runAction(s, HOST, "activity.create", { name: "Game", kind: "team", scoring: "judged" }, T0).data as { id: string };
+    runAction(s, HOST, "activity.video", { activityId: id, videoId: vid }, T0);
+    runAction(s, HOST, "video.play", { videoId: vid }, T0);
+    const r = runAction(s, HOST, "video.delete", { id: vid }, T0);
+    expect(r.deleteVideos).toEqual([vid]);
+    expect(s.video).toBeNull();
+    expect(s.activities[0].videoId).toBeNull();
+    expect(() => runAction(s, HOST, "activity.video", { activityId: id, videoId: vid }, T0)).toThrow(/no longer exists/);
   });
 });

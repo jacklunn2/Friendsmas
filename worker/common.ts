@@ -22,6 +22,8 @@ export interface ActionResult {
   deletePhotos?: string[];
   /** Quiz pictures that should be deleted. */
   deleteImages?: string[];
+  /** Video clips that should be deleted. */
+  deleteVideos?: string[];
 }
 
 export type Payload = Record<string, unknown>;

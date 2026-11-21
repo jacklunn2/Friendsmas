@@ -8,11 +8,17 @@ import {
   AGENDA_TIME_MAX,
   CAPTION_MAX,
   MAX_PAST_WINNERS,
+  VIDEO_MAX_BYTES,
+  VIDEO_TOTAL_MAX_BYTES,
   imageUrl,
+  type ActivityView,
   type AgendaItem,
   type HostView,
 } from "../../../shared/types";
 import { uploadQuizImage } from "../image";
+import { useTicker } from "../net";
+import { formatClock } from "../ui";
+import { formatBytes, uploadVideo } from "../video";
 import type { Run } from "./Scoring";
 
 export function WelcomePanel({ view, run }: { view: HostView; run: Run }) {
@@ -247,5 +253,150 @@ function CaptionInput({ value, onSave }: { value: string; onSave: (v: string) =>
       onBlur={() => text !== value && onSave(text)}
       onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()}
     />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Videos
+
+export function VideosPanel({ view, run }: { view: HostView; run: Run }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [progress, setProgress] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const used = view.videos.reduce((n, v) => n + v.size, 0);
+  const usedBy = (id: string) => view.activities.filter((a) => a.videoId === id).map((a) => a.name);
+
+  const choose = async (file: File | undefined) => {
+    if (!file) return;
+    setError(null);
+    setProgress(0);
+    try {
+      await uploadVideo(file, setProgress);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setProgress(null);
+    }
+  };
+
+  return (
+    <section className="panel" aria-labelledby="videos-h">
+      <header className="panel__head">
+        <h2 id="videos-h" className="panel__title">
+          Videos
+        </h2>
+        <span className="panel__meta">
+          {formatBytes(used)} of {formatBytes(VIDEO_TOTAL_MAX_BYTES)} used
+        </span>
+      </header>
+      <p className="host__muted">
+        Clips up to {Math.round(VIDEO_MAX_BYTES / 1024 / 1024)} MB each (MP4 works best). Attach one to an activity and it plays on the TV, with sound, when the
+        activity starts.
+      </p>
+      <div className="row__actions">
+        <input ref={input} type="file" accept="video/mp4,video/webm,video/quicktime,.mov" hidden onChange={(e) => choose(e.target.files?.[0]).then(() => (e.target.value = ""))} />
+        <button className="btn btn--small btn--secondary" disabled={progress !== null} onClick={() => input.current?.click()}>
+          {progress !== null ? `Uploading… ${Math.round(progress * 100)}%` : "Upload a video"}
+        </button>
+        {progress !== null && <progress className="upload-progress" value={progress} max={1} />}
+      </div>
+      {error && <p className="form-error">{error}</p>}
+      {view.videos.length > 0 ? (
+        <ul className="plain-list videos-edit">
+          {view.videos.map((v) => (
+            <li key={v.id} className="videos-edit__row">
+              <span className="videos-edit__name">
+                🎬 {v.name}
+                <span className="host__muted">
+                  {" "}
+                  · {formatBytes(v.size)}
+                  {v.durationMs ? ` · ${formatClock(v.durationMs)}` : ""}
+                  {usedBy(v.id).length ? ` · opens ${usedBy(v.id).join(", ")}` : ""}
+                </span>
+              </span>
+              <span className="row__actions">
+                <button className="btn btn--small btn--secondary" onClick={() => run("video.play", { videoId: v.id })}>
+                  Play on the TV
+                </button>
+                <button
+                  className="btn btn--small btn--ghost"
+                  onClick={() => {
+                    const name = prompt("Name this video", v.name);
+                    if (name && name !== v.name) run("video.rename", { id: v.id, name });
+                  }}
+                >
+                  Rename
+                </button>
+                <button className="btn btn--small btn--ghost" onClick={() => confirm(`Delete ${v.name}?`) && run("video.delete", { id: v.id })}>
+                  Delete
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="host__muted">No videos yet.</p>
+      )}
+    </section>
+  );
+}
+
+/** Play, pause, restart and skip, shown at the top of the control room while a clip is on the TV. */
+export function VideoBar({ view, run, serverNow }: { view: HostView; run: Run; serverNow: () => number }) {
+  const pb = view.video;
+  useTicker(500, !!pb?.playing);
+  if (!pb) return null;
+  const v = view.videos.find((x) => x.id === pb.videoId);
+  const at = pb.playing ? pb.positionMs + (serverNow() - pb.since) : pb.positionMs;
+  return (
+    <div className="video-bar" role="region" aria-label="Video on the TV">
+      <span className="video-bar__title">
+        🎬 On the TV: <strong>{v?.name ?? "Video"}</strong>
+        <span className="host__muted">
+          {" "}
+          {formatClock(at)}
+          {v?.durationMs ? ` / ${formatClock(v.durationMs)}` : ""}
+        </span>
+      </span>
+      <span className="row__actions">
+        {pb.playing ? (
+          <button className="btn btn--small btn--secondary" onClick={() => run("video.pause")}>
+            ❚❚ Pause
+          </button>
+        ) : (
+          <button className="btn btn--small btn--secondary" onClick={() => run("video.resume")}>
+            ▶ Play
+          </button>
+        )}
+        <button className="btn btn--small btn--ghost" onClick={() => run("video.restart")}>
+          ↺ From the start
+        </button>
+        <button className="btn btn--small btn--primary" onClick={() => run("video.skip")}>
+          Skip ⏭
+        </button>
+      </span>
+    </div>
+  );
+}
+
+/** Chooses the clip that opens an activity. */
+export function ActivityVideoPicker({ activity, view, run }: { activity: ActivityView; view: HostView; run: Run }) {
+  if (!view.videos.length && !activity.videoId) return null;
+  return (
+    <label className="field field--inline video-pick">
+      <span className="field__label">Opening video</span>
+      <select
+        className="input input--small"
+        value={activity.videoId ?? ""}
+        onChange={(e) => run("activity.video", { activityId: activity.id, videoId: e.target.value || null })}
+      >
+        <option value="">None</option>
+        {view.videos.map((v) => (
+          <option key={v.id} value={v.id}>
+            {v.name}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

@@ -13,7 +13,7 @@ import { useTicker, type ConnStatus } from "../net";
 import { Avatar, ConnectionBanner, EventCodeContext, formatClock, teamStyle, Wordmark } from "../ui";
 import { QuestionnairePanel } from "./Questionnaire";
 import { MissionsPanel } from "./Missions";
-import { PrizePanel, WelcomePanel } from "./Show";
+import { PrizePanel, VideoBar, VideosPanel, WelcomePanel } from "./Show";
 import { ScoringPanel, type Notify, type Run } from "./Scoring";
 
 type Send = <T = unknown>(action: string, payload?: Record<string, unknown>) => Promise<T>;
@@ -65,6 +65,7 @@ export function ControlRoom({ view, status, send, serverNow }: Props) {
     <main className="host">
       <ConnectionBanner status={status} />
       <TopBar view={view} run={run} status={status} />
+      <VideoBar view={view} run={run} serverNow={serverNow} />
       <NowPanel view={view} run={run} serverNow={serverNow} />
       {!drafting && view.draw.phase === "complete" && (
         <ScoringPanel view={view} run={run} notify={notify} serverNow={serverNow} />
@@ -81,6 +82,7 @@ export function ControlRoom({ view, status, send, serverNow }: Props) {
         <div className="prep__grid">
           <WelcomePanel view={view} run={run} />
           <PrizePanel view={view} run={run} />
+          <VideosPanel view={view} run={run} />
         </div>
       </section>
       <footer className="host__footer">

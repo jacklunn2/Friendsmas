@@ -21,6 +21,7 @@ import {
 } from "../shared/types";
 import { findPlayer, findTeam, int, requireComplete, UserError, type Actor, type Handler, type Payload } from "./common";
 import { shuffle } from "./random";
+import { startActivityVideo } from "./show";
 import { newId, type Activity, type Question, type QuizAnswer, type ServerState } from "./state";
 
 const MAX_QUESTIONS = 100;
@@ -433,7 +434,7 @@ export const quizHost: Record<string, Handler> = {
   },
 
   /** Puts a quiz on the TV, ready for its first unplayed question. */
-  "quiz.start": (s, _a, p) => {
+  "quiz.start": (s, _a, p, now) => {
     requireComplete(s);
     const quiz = findQuiz(s, p.activityId);
     if (!quiz.questions.length) throw new UserError(`${quiz.name} has no questions yet.`);
@@ -450,7 +451,9 @@ export const quizHost: Record<string, Handler> = {
       }
       s.quiz.endsAt = null;
     }
+    const wasOn = s.stage.screen === "quiz" && s.stage.activityId === quiz.id;
     s.stage = { screen: "quiz", activityId: quiz.id, timer: null };
+    if (!wasOn) startActivityVideo(s, quiz.id, now);
     return { audit: ["quiz.start", `${quiz.name} on the TV`] };
   },
 
