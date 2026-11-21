@@ -11,15 +11,14 @@ import {
   scoringSummary,
   teamDisplayName,
   type PlayerView,
-  type PublicPlayer,
 } from "../../../shared/types";
 import { revealDurationMs } from "../timing";
 import { PhonePoll } from "./PhonePoll";
 import { PhoneQuiz } from "./PhoneQuiz";
-import { MissionLayer } from "./Mission";
+import { PhoneFooter } from "./Footer";
+import { ErrorText, NameForm, PhotoStep } from "./Profile";
 import { QuestionnaireForm } from "./Questionnaire";
 import { storage, useRoom, useTicker } from "../net";
-import { prepareSelfie, uploadSelfie } from "../photo";
 import { Avatar, AvatarPicker, ConnectionBanner, EventCodeContext, formatClock, playerMap, TeamCard, teamStyle, Wordmark } from "../ui";
 
 export function PlayerApp({ code }: { code: string }) {
@@ -54,28 +53,26 @@ export function PlayerApp({ code }: { code: string }) {
 
   return (
     <EventCodeContext.Provider value={code}>
-      <Shell>
+      <Shell withFooter={!!view.me}>
         <ConnectionBanner status={status} />
         {!view.me ? (
           <Join view={view} send={send} />
         ) : view.me.status === "pending" ? (
           <Prep view={view} send={send} getToken={tokenStore.get} code={code} pending />
         ) : (
-          <>
-            <InGame view={view} send={send} serverNow={serverNow} getToken={tokenStore.get} code={code} />
-            {view.myMission && <MissionLayer mission={view.myMission} send={send} />}
-          </>
+          <InGame view={view} send={send} serverNow={serverNow} getToken={tokenStore.get} code={code} />
         )}
       </Shell>
+      {view.me && <PhoneFooter view={view} send={send} getToken={tokenStore.get} />}
     </EventCodeContext.Provider>
   );
 }
 
 type Send = <T = unknown>(action: string, payload?: Record<string, unknown>) => Promise<T>;
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({ children, withFooter }: { children: React.ReactNode; withFooter?: boolean }) {
   return (
-    <main className="phone">
+    <main className={`phone${withFooter ? " phone--footer" : ""}`}>
       <Wordmark className="wordmark--phone" />
       {children}
     </main>
@@ -88,15 +85,6 @@ function Waiting({ title, body }: { title: string; body: string }) {
       <h1 className="phone__title">{title}</h1>
       <p>{body}</p>
     </section>
-  );
-}
-
-function ErrorText({ error }: { error: string | null }) {
-  if (!error) return null;
-  return (
-    <p className="form-error" role="alert">
-      {error}
-    </p>
   );
 }
 
@@ -287,45 +275,6 @@ function Prep({ view, send, getToken, code, pending }: { view: PlayerView; send:
   return <AllSet view={view} pending={pending} onAnswers={() => setQuestOpen(true)} onPhoto={() => setPhotoOpen(true)} onName={() => setNameOpen(true)} />;
 }
 
-/** A guest changes the name everyone sees. */
-function NameForm({ me, send, onDone }: { me: PublicPlayer; send: Send; onDone: () => void }) {
-  const [name, setName] = useState(me.name);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  return (
-    <form
-      className="phone__card"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        setBusy(true);
-        setError(null);
-        try {
-          await send("player.rename", { name });
-          onDone();
-        } catch (err) {
-          setError((err as Error).message);
-        } finally {
-          setBusy(false);
-        }
-      }}
-    >
-      <h1 className="phone__title">Your nickname</h1>
-      <p className="phone__muted">This is the name everyone sees: on the TV, the wheel and the leaderboard.</p>
-      <label className="field">
-        <span className="field__label">Nickname</span>
-        <input className="input" value={name} maxLength={NAME_MAX} onChange={(e) => setName(e.target.value)} required autoFocus />
-      </label>
-      <ErrorText error={error} />
-      <button className="btn btn--primary btn--block" disabled={busy || !name.trim()}>
-        {busy ? "Saving…" : "Save"}
-      </button>
-      <button type="button" className="btn btn--ghost btn--block" onClick={onDone}>
-        Cancel
-      </button>
-    </form>
-  );
-}
-
 function AllSet({ view, pending, onAnswers, onPhoto, onName }: { view: PlayerView; pending?: boolean; onAnswers: () => void; onPhoto: () => void; onName: () => void }) {
   const me = view.me!;
   const q = view.myQuestionnaire;
@@ -406,19 +355,6 @@ function InGame({ view, send, serverNow, getToken, code }: InGameProps) {
   );
   const [questOpen, setQuestOpen] = useState(false);
   const [nameOpen, setNameOpen] = useState(false);
-  const photoButton = (
-    <div className="phone__links">
-      <button className="btn btn--ghost btn--small photo-link" onClick={() => setNameOpen(true)}>
-        Change your nickname
-      </button>
-      <button className="btn btn--ghost btn--small photo-link" onClick={() => setPhotoOpen(true)}>
-        {me.photo ? "Change your photo" : "Add your photo"}
-      </button>
-      <button className="btn btn--ghost btn--small photo-link" onClick={() => setQuestOpen(true)}>
-        {view.myQuestionnaire ? "Your food and facts" : "Answer the questions"}
-      </button>
-    </div>
-  );
   const players = useMemo(() => playerMap(view.players), [view.players]);
 
   // Phones wait for the wheel on the TV to stop before showing a result.
@@ -487,7 +423,6 @@ function InGame({ view, send, serverNow, getToken, code }: InGameProps) {
             </li>
           ))}
         </ul>
-        {photoButton}
       </section>
     );
   }
@@ -542,7 +477,6 @@ function InGame({ view, send, serverNow, getToken, code }: InGameProps) {
       {phase === "complete" && <Naming view={view} send={send} serverNow={serverNow} />}
       {phase === "complete" && <MyStandings view={view} serverNow={serverNow} />}
       <TeamCard team={team} players={players} showSeats />
-      {photoButton}
     </section>
   );
 }
@@ -726,109 +660,3 @@ function Naming({ view, send, serverNow }: { view: PlayerView; send: Send; serve
   );
 }
 
-// ---------------------------------------------------------------------------
-// Guest photo
-
-function PhotoStep({
-  me,
-  getToken,
-  send,
-  intro = false,
-  onDone,
-}: {
-  me: PublicPlayer;
-  getToken: () => string | null;
-  send: Send;
-  intro?: boolean;
-  onDone?: () => void;
-}) {
-  const input = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<{ blob: Blob; url: string } | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => () => {
-    if (preview) URL.revokeObjectURL(preview.url);
-  }, [preview]);
-
-  const choose = async (file: File | undefined) => {
-    if (!file) return;
-    setError(null);
-    setBusy(true);
-    try {
-      const blob = await prepareSelfie(file);
-      setPreview({ blob, url: URL.createObjectURL(blob) });
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-      if (input.current) input.current.value = "";
-    }
-  };
-
-  const upload = async () => {
-    const token = getToken();
-    if (!preview || !token) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await uploadSelfie(preview.blob, token);
-      setPreview(null);
-      onDone?.();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="photo-step">
-      <h1 className="phone__title">{intro ? "Add your photo" : me.photo ? "Your photo" : "Add your photo"}</h1>
-      <p>It flashes up on the TV when you're drawn, and shows on your team card.</p>
-      {preview ? (
-        <img className="photo-step__preview avatar--photo" src={preview.url} alt="Your new photo" />
-      ) : (
-        <Avatar player={me} className="photo-step__preview" />
-      )}
-      <input
-        ref={input}
-        type="file"
-        accept="image/*"
-        hidden
-        onChange={(e) => choose(e.target.files?.[0])}
-      />
-      <div className="photo-step__actions">
-        {preview ? (
-          <>
-            <button className="btn btn--primary btn--block" disabled={busy} onClick={upload}>
-              {busy ? "Uploading…" : "Use this photo"}
-            </button>
-            <button className="btn btn--ghost btn--block" disabled={busy} onClick={() => input.current?.click()}>
-              Try a different photo
-            </button>
-          </>
-        ) : (
-          <button className="btn btn--primary btn--block" disabled={busy} onClick={() => input.current?.click()}>
-            {busy ? "Getting your photo ready…" : me.photo ? "Take or choose a new photo" : "Take a selfie or choose a photo"}
-          </button>
-        )}
-        {me.photo && !preview && (
-          <button
-            className="btn btn--ghost btn--block"
-            disabled={busy}
-            onClick={() => send("player.removePhoto").catch((e) => setError((e as Error).message))}
-          >
-            Remove my photo
-          </button>
-        )}
-        {onDone && (
-          <button className="btn btn--ghost btn--block" disabled={busy} onClick={onDone}>
-            {me.photo ? "Done" : intro ? "Skip for now" : "Not now"}
-          </button>
-        )}
-      </div>
-      <ErrorText error={error} />
-    </div>
-  );
-}

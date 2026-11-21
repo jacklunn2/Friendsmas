@@ -211,7 +211,7 @@ describe("secret missions", () => {
     runAction(s, HOST, "missions.notice", { playerId: pid }, T0 + 2);
     expect(s.ledger.find((e) => e.id === entry.id)!.voided).toBe(true);
     expect(hostView(s, [], T0).liveTotals[team]).toBe(0);
-    expect(playerView(s, pid, T0).myMission!.status).toBe("noticed");
+    expect(playerView(s, pid, T0).myMission).toMatchObject({ status: "noticed", noticedAt: T0 + 2 });
     // And back again.
     runAction(s, HOST, "missions.complete", { playerId: pid }, T0 + 3);
     expect(hostView(s, [], T0).liveTotals[team]).toBe(5);

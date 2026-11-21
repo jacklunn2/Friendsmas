@@ -524,6 +524,8 @@ export interface MyMissionView {
   status: MissionStatus;
   /** False until the guest first taps to reveal it. */
   seen: boolean;
+  /** When the host marked it Noticed (null otherwise), so the phone can sound the alarm once. */
+  noticedAt: number | null;
 }
 
 export interface MissionAssignmentView {

@@ -3287,26 +3287,6 @@ img.member__emoji {
 }
 
 /* Phone: secret mission */
-.mission-fab {
-  position: fixed;
-  right: 0.9rem;
-  bottom: calc(0.9rem + env(safe-area-inset-bottom));
-  z-index: 30;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  border: 2px solid var(--brass);
-  background: #1a1410;
-  color: var(--brass);
-  font-weight: 700;
-  border-radius: 999px;
-  padding: 0.5em 0.95em 0.5em 0.75em;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
-  cursor: pointer;
-}
-.mission-fab > span:first-child {
-  font-size: 1.3rem;
-}
 .mission {
   position: fixed;
   inset: 0;
@@ -4683,4 +4663,201 @@ img.member__emoji {
   background: var(--spruce);
   box-shadow: 0 0 0 2px var(--brass);
   flex: none;
+}
+
+/* Phone: the footer bar (photo, food and facts, mission) */
+.phone--footer {
+  padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
+}
+.phone-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem calc(0.5rem + env(safe-area-inset-bottom));
+  background: rgba(10, 30, 25, 0.94);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-top: 1px solid var(--spruce-line);
+}
+.phone-footer__item {
+  position: relative;
+  flex: 1 1 0;
+  max-width: 10rem;
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: 0.2rem;
+  padding: 0.35rem 0.3rem;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--snow);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.phone-footer__item.is-active {
+  background: var(--spruce);
+  border-color: var(--spruce-line);
+}
+.phone-footer__photo {
+  width: 2.3rem;
+  height: 2.3rem;
+  font-size: 1.3rem;
+  border-radius: 50%;
+  background: var(--spruce);
+  box-shadow: 0 0 0 2px var(--brass);
+}
+.phone-footer__icon {
+  font-size: 1.6rem;
+  line-height: 2.3rem;
+  height: 2.3rem;
+}
+.phone-footer__label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.phone-footer__item--mission {
+  color: var(--brass);
+}
+.phone-footer__item--mission.is-new .phone-footer__icon {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.phone-footer__dot {
+  position: absolute;
+  top: 0.35rem;
+  right: calc(50% - 1.5rem);
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: var(--cranberry);
+  box-shadow: 0 0 0 2px var(--pine);
+}
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 29;
+  background: rgba(6, 18, 15, 0.97);
+  overflow-y: auto;
+  animation: sheet-in 220ms ease-out;
+}
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(2rem);
+  }
+}
+.sheet__body {
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: max(1rem, env(safe-area-inset-top)) 1.1rem calc(6.5rem + env(safe-area-inset-bottom));
+  display: grid;
+  gap: 1rem;
+}
+.sheet__close {
+  justify-self: end;
+  background: none;
+  border: 1px solid var(--spruce-line);
+  color: var(--mist);
+  border-radius: 999px;
+  padding: 0.35em 0.9em;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sheet__me {
+  text-align: center;
+  justify-items: center;
+}
+.sheet__me p {
+  margin: 0;
+}
+.sheet__name {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+.food-sheet .phone__title {
+  font-size: 1.2rem;
+  margin: 0.2rem 0 0;
+}
+.food-sheet__dish {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0;
+}
+.food-sheet__facts {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+/* Phone: mission noticed */
+.rumbled {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  background: #2a0710;
+  animation: rumbled-flash 0.5s steps(2) 4;
+}
+@keyframes rumbled-flash {
+  50% {
+    background: #a3142f;
+  }
+}
+.rumbled__body {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 1rem;
+  padding: 2rem 1.6rem;
+  text-align: center;
+  cursor: pointer;
+  color: white;
+}
+.rumbled__siren {
+  font-size: 4.5rem;
+  animation: siren 0.6s ease-in-out infinite alternate;
+}
+@keyframes siren {
+  to {
+    transform: rotate(-12deg) scale(1.15);
+  }
+}
+.rumbled__title {
+  font-family: var(--display);
+  font-size: 3.2rem;
+  line-height: 1;
+  color: #ffd0d7;
+  text-transform: uppercase;
+  animation: slam 600ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.rumbled__text {
+  font-size: 1.2rem;
+  font-weight: 700;
+  max-width: 20rem;
+}
+.rumbled__mission {
+  font-family: "Courier New", ui-monospace, monospace;
+  font-weight: 700;
+  color: #ffd0d7;
+  max-width: 20rem;
+  text-decoration: line-through;
+  text-decoration-thickness: 3px;
+}
+.rumbled__tap {
+  margin-top: 1rem;
+  color: #ffb3c0;
+  font-size: 0.95rem;
+  animation: pulse 1.6s ease-in-out infinite;
 }

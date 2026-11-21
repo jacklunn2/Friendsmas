@@ -373,6 +373,11 @@ async function main() {
   await host.req("missions.notice", { playerId: caught });
   await host.until((v) => v.missions.assignments.find((x) => x.playerId === caught)?.status === "noticed");
   check(host.view.ledger.some((e) => e.playerId === caught && e.reason === "Secret mission" && e.voided), "a noticed mission's +5 is voided, not deleted");
+  const caughtPhone = Object.values(phones).find((c) => c.view?.me?.id === caught && c.ws.readyState === 1);
+  if (caughtPhone) {
+    await caughtPhone.until((v) => v.myMission?.status === "noticed" && v.myMission.noticedAt);
+    check(true, "the noticed guest's phone gets the alert");
+  }
 
   // --- Block 4: the House
   const { id: planes } = await host.req("activity.create", { name: "Paper planes", kind: "team", scoring: "judged" });

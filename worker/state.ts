@@ -238,6 +238,8 @@ export interface MissionAssignment {
   /** The bonus entry while completed (voided, never deleted, if it's undone). */
   entryId: string | null;
   assignedAt: number;
+  /** When it was marked Noticed. */
+  noticedAt?: number | null;
 }
 
 export interface MissionsState {

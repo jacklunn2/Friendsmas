@@ -85,7 +85,7 @@ export function myMissionView(s: ServerState, playerId: string | null): MyMissio
   // The +5 stays a secret, even from the guest, until it's on the leaderboard.
   const entry = a.entryId ? s.ledger.find((e) => e.id === a.entryId) : null;
   const status = a.status === "completed" && !entry?.revealed ? "active" : a.status;
-  return { text: m.text, status, seen: a.seen };
+  return { text: m.text, status, seen: a.seen, noticedAt: a.status === "noticed" ? (a.noticedAt ?? null) : null };
 }
 
 export function hostMissionsView(s: ServerState): HostMissionsView {
@@ -217,6 +217,7 @@ export const missionsHost: Record<string, Handler> = {
     if (a.status === "noticed") return { noChange: true };
     voidBonus(s, a, now);
     a.status = "noticed";
+    a.noticedAt = now;
     return { audit: ["missions.notice", `${pl.name}'s mission was noticed`] };
   },
 

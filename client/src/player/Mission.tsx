@@ -4,12 +4,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MISSION_POINTS, type MyMissionView } from "../../../shared/types";
+import { storage } from "../net";
 
 type Send = <T = unknown>(action: string, payload?: Record<string, unknown>) => Promise<T>;
 
-export function MissionLayer({ mission, send }: { mission: MyMissionView; send: Send }) {
-  // Opens by itself when a new mission arrives (or when one is redrawn).
-  const [open, setOpen] = useState(!mission.seen);
+/** The mission pop-up. The footer's Mission button opens it; it opens by itself for a new mission. */
+export function MissionLayer({ mission, send, open, setOpen }: { mission: MyMissionView; send: Send; open: boolean; setOpen: (open: boolean) => void }) {
   const [revealed, setRevealed] = useState(false);
   const lastText = useRef(mission.text);
   useEffect(() => {
@@ -21,6 +21,8 @@ export function MissionLayer({ mission, send }: { mission: MyMissionView; send: 
         navigator.vibrate?.([60, 60, 60]);
       }
     }
+    // setOpen is stable enough; only a new mission should pop it open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mission.text, mission.seen]);
 
   const reveal = () => {
@@ -32,14 +34,7 @@ export function MissionLayer({ mission, send }: { mission: MyMissionView; send: 
     setRevealed(false);
   };
 
-  if (!open) {
-    return (
-      <button className="mission-fab" onClick={() => setOpen(true)} aria-label="Your secret mission">
-        <span aria-hidden>🕵️</span>
-        <span className="mission-fab__label">Secret mission</span>
-      </button>
-    );
-  }
+  if (!open) return null;
 
   return (
     <div className={`mission${revealed ? " is-revealed" : ""}`} role="dialog" aria-modal="true" aria-label="Your secret mission">
@@ -60,6 +55,41 @@ export function MissionLayer({ mission, send }: { mission: MyMissionView; send: 
           <span className="mission__tap">Tap to hide</span>
         </button>
       )}
+    </div>
+  );
+}
+
+/**
+ * When the host marks a guest's mission as Noticed, their phone sounds the
+ * alarm: a full-screen "Rumbled!" and a buzz, once. If the phone was closed at
+ * the time, it shows the next time they open the link.
+ */
+export function RumbledAlert({ mission, code, playerId }: { mission: MyMissionView; code: string; playerId: string }) {
+  const store = storage(`fm.rumbled.${code}.${playerId}`);
+  const at = mission.noticedAt;
+  const [dismissed, setDismissed] = useState(() => store.get());
+  const show = at !== null && dismissed !== String(at);
+  useEffect(() => {
+    if (show) navigator.vibrate?.([400, 120, 400, 120, 600]);
+  }, [show]);
+  if (!show) return null;
+  return (
+    <div className="rumbled" role="alertdialog" aria-modal="true" aria-label="Your mission was noticed">
+      <button
+        className="rumbled__body"
+        onClick={() => {
+          store.set(String(at));
+          setDismissed(String(at));
+        }}
+      >
+        <span className="rumbled__siren" aria-hidden>
+          🚨
+        </span>
+        <span className="rumbled__title">Rumbled!</span>
+        <span className="rumbled__text">Someone spotted your secret mission. It's failed, so no points this time.</span>
+        <span className="rumbled__mission">"{mission.text}"</span>
+        <span className="rumbled__tap">Tap to close</span>
+      </button>
     </div>
   );
 }
