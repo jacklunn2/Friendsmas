@@ -120,7 +120,7 @@ export function HousePad({ activity: a, view, run }: { activity: ActivityView; v
           )}
           {!live && <p className="host__muted">Each team's score is the points they earn in this {a.format === "poll" ? "poll" : "quiz"}.</p>}
           <button
-            className="btn btn--primary btn--finale"
+            className="btn btn--primary house-pad__go"
             disabled={!drawn || !h.locked}
             onClick={() => (!h.settled || confirm("Settle it again? The old House points are voided and worked out afresh.")) && run("house.reveal", { activityId: a.id })}
           >

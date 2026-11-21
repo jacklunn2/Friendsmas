@@ -107,7 +107,7 @@ function Presenter({ activity: a, view, run, players, serverNow, onEdit }: Props
     return (
       <div className="presenter">
         <p className="host__muted">
-          {questions.length} questions{played ? `, ${played} played so far` : ""}.
+          {questions.length} {questions.length === 1 ? "question" : "questions"}{played ? `, ${played} played so far` : ""}.
         </p>
         <button className="btn btn--primary" disabled={view.draw.phase !== "complete"} onClick={() => run("poll.start", { activityId: a.id })}>
           {played ? "Put the poll back on the TV" : "Start the poll on the TV"}

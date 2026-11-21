@@ -67,12 +67,6 @@ export function Welcome({ view, trophyUrl }: { view: StageView; trophyUrl: strin
       </div>
 
       <aside className="welcome__side">
-        {trophyUrl && (
-          <figure className="welcome__trophy">
-            <img src={trophyUrl} alt="The Friendsmas trophy" />
-            <figcaption>Up for grabs</figcaption>
-          </figure>
-        )}
         {view.agenda.length > 0 && (
           <div className="welcome__agenda">
             <h2 className="welcome__title">Today</h2>
@@ -86,12 +80,20 @@ export function Welcome({ view, trophyUrl }: { view: StageView; trophyUrl: strin
             </ol>
           </div>
         )}
+        <div className="welcome__bottom">
+          {trophyUrl && (
+            <figure className="welcome__trophy">
+              <img src={trophyUrl} alt="The Friendsmas trophy" />
+              <figcaption>Up for grabs</figcaption>
+            </figure>
+          )}
         <div className="welcome__join">
           <div className="welcome__qr" dangerouslySetInnerHTML={{ __html: qr }} aria-label="QR code for the join link" role="img" />
           <p className="welcome__join-text">
             Scan to join
             <span className="welcome__url">{joinUrl.replace(/^https?:\/\//, "")}</span>
           </p>
+        </div>
         </div>
       </aside>
 
