@@ -12,6 +12,7 @@ import {
   type PublicPlayer,
 } from "../../../shared/types";
 import { revealDurationMs } from "../timing";
+import { PhonePoll } from "./PhonePoll";
 import { PhoneQuiz } from "./PhoneQuiz";
 import { MissionLayer } from "./Mission";
 import { QuestionnaireForm } from "./Questionnaire";
@@ -316,7 +317,7 @@ function InGame({ view, send, serverNow, getToken, code }: InGameProps) {
 
   // Guests who haven't done the questionnaire are asked to finish it first,
   // unless the draw or a quiz is happening right now.
-  const busyMoment = phase === "locked" || phase === "revealing" || holding || (phase === "complete" && view.stage.screen === "quiz");
+  const busyMoment = phase === "locked" || phase === "revealing" || holding || (phase === "complete" && (view.stage.screen === "quiz" || view.stage.screen === "poll"));
   if (questOpen || (!view.myQuestionnaire && !busyMoment)) {
     return (
       <QuestionnaireForm
@@ -388,6 +389,7 @@ function InGame({ view, send, serverNow, getToken, code }: InGameProps) {
     <section className="phone__team" style={teamStyle(team)}>
       {phase === "complete" && <NowPlaying view={view} serverNow={serverNow} />}
       {phase === "complete" && view.stage.screen === "quiz" && <PhoneQuiz view={view} send={send} serverNow={serverNow} />}
+      {phase === "complete" && view.stage.screen === "poll" && <PhonePoll view={view} send={send} serverNow={serverNow} />}
       <p className="phone__kicker">
         {team.badge} You're on {teamDisplayName(team)}
       </p>

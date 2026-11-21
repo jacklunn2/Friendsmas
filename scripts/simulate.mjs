@@ -405,6 +405,46 @@ async function main() {
   const qr = await stage.until((v) => v.stage.screen === "results" && v.results?.activityId === quizId);
   check(qr.results.rows.filter((r) => r.points === 2).length === 2, "quiz points reach the round results");
 
+  // --- Block 4: polls on phones
+  const livePhones = host.view.roster.filter((p) => p.teamId).map((p) => ({ p, c: phoneFor(p.id) })).filter((x) => x.c);
+  const { id: pollId } = await host.req("activity.create", { name: "Superlatives", format: "poll", questionSeconds: 0 });
+  await host.req("poll.question.save", { activityId: pollId, question: { prompt: "Most likely to fall asleep first", optionsKind: "players", scoring: "winner", points: 3 } });
+  await host.req("poll.start", { activityId: pollId });
+  await host.req("poll.open");
+  const pq = await stage.until((v) => v.stage.screen === "poll" && v.poll?.phase === "open");
+  const sleepy = livePhones[0].p;
+  const selfVote = await livePhones[0].c.req("poll.vote", { questionId: pq.poll.question.id, key: sleepy.id }).catch((e) => e.message);
+  check(/yourself/.test(selfVote), "nobody can vote for themselves");
+  for (const { c } of livePhones.slice(1, 5)) await c.req("poll.vote", { questionId: pq.poll.question.id, key: sleepy.id });
+  await livePhones[0].c.req("poll.vote", { questionId: pq.poll.question.id, key: livePhones[1].p.id });
+  await stage.until((v) => v.poll.answeredIds.length === 5);
+  check(!JSON.stringify(stage.view.poll).includes(`"votes"`) && stage.view.poll.reveal === null, "votes stay hidden from the TV until the reveal");
+  await host.req("poll.reveal");
+  const pr = await stage.until((v) => v.poll?.phase === "revealed");
+  check(pr.poll.reveal.winners[0] === sleepy.id && pr.poll.reveal.counts[sleepy.id] === 4, "the reveal shows the winner and the votes");
+  check(host.view.ledger.some((e) => e.activityId === pollId && e.playerId === sleepy.id && e.points === 3 && !e.revealed), "the winner's points wait for the round results");
+
+  const { id: wwtId } = await host.req("activity.create", { name: "Who wrote this?", format: "poll", pollKind: "whowrote", perCorrect: 2, foolBonus: 4, questionSeconds: 0 });
+  const factOwner = livePhones[2];
+  const ownerFact = host.view.questionnaires[factOwner.p.id].facts[0];
+  await host.req("poll.question.save", { activityId: wwtId, question: { factId: ownerFact.id } });
+  check(!JSON.stringify(stage.view).includes(ownerFact.text), "a secret fact stays off the TV before its question");
+  await host.req("poll.start", { activityId: wwtId });
+  await host.req("poll.open");
+  const wq = await stage.until((v) => v.poll?.activityId === wwtId && v.poll.phase === "open");
+  check(wq.poll.question.prompt === ownerFact.text, "the fact goes up on the TV, anonymously");
+  await factOwner.c.until((v) => v.myFactOnTv);
+  check(true, "the writer's phone knows it's their fact");
+  const ownVote = await factOwner.c.req("poll.vote", { questionId: wq.poll.question.id, key: livePhones[0].p.id }).catch((e) => e.message);
+  check(/yours/.test(ownVote), "the writer sits their own fact out");
+  await livePhones[0].c.req("poll.vote", { questionId: wq.poll.question.id, key: factOwner.p.id });
+  await livePhones[1].c.req("poll.vote", { questionId: wq.poll.question.id, key: livePhones[3].p.id });
+  await livePhones[3].c.req("poll.vote", { questionId: wq.poll.question.id, key: livePhones[1].p.id });
+  await host.req("poll.reveal");
+  const wr = await stage.until((v) => v.poll?.activityId === wwtId && v.poll.phase === "revealed");
+  check(wr.poll.reveal.writerId === factOwner.p.id && wr.poll.reveal.correctIds.length === 1, "the reveal unmasks the writer and who guessed right");
+  check(host.view.ledger.some((e) => e.activityId === wwtId && e.playerId === factOwner.p.id && e.points === 4), "the writer who fooled the most gets the bonus");
+
   await host.req("standings.blackout", { on: true });
   const blocked = await host.req("standings.reveal").catch((e) => e.message);
   check(/blackout/.test(blocked), "the blackout freezes the leaderboard");

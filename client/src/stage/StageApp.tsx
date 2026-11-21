@@ -4,6 +4,7 @@ import { audioOn, enableAudio, sfx } from "../audio";
 import { storage, useRoom, useTicker } from "../net";
 import { Avatar, ConnectionBanner, EventCodeContext, formatClock, playerMap, TeamCard, teamStyle, Wordmark } from "../ui";
 import { MissionsReveal } from "./MissionsReveal";
+import { PollStage } from "./PollStage";
 import { QuizStage } from "./QuizStage";
 import { ActivityIntro, ActivityResults, Standings } from "./Scoreboard";
 import { Welcome } from "./Welcome";
@@ -174,6 +175,8 @@ function StageScene({ view, anim, serverNow, onLanded, onSpin }: SceneProps) {
   switch (view.stage.screen) {
     case "welcome":
       return <Welcome view={view} trophyUrl={null} />;
+    case "poll":
+      return view.poll ? <PollStage key={`${view.poll.activityId}-${view.poll.question?.id ?? "intro"}`} view={view} serverNow={serverNow} /> : <Teams view={view} serverNow={serverNow} />;
     case "missions":
       return view.missionsReveal ? <MissionsReveal view={view} /> : <Teams view={view} serverNow={serverNow} />;
     case "activity":

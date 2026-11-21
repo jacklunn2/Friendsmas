@@ -10,6 +10,7 @@ import {
   type ActivityFormat,
   type ActivityKind,
   type ActivityView,
+  type PollKind,
   type HostPlayer,
   type HostView,
   type LedgerEntryView,
@@ -18,6 +19,7 @@ import {
 } from "../../../shared/types";
 import { useTicker } from "../net";
 import { Avatar, formatClock, teamStyle } from "../ui";
+import { PollPad, pollSummary } from "./Polls";
 import { QuizPad, quizSummary } from "./Quiz";
 
 /** Sends an action; resolves to its data (or true) on success, undefined on failure. */
@@ -87,11 +89,13 @@ export function ScoringPanel({ view, run, notify, serverNow }: Props) {
                 >
                   <span className="activity-list__name">{a.name}</span>
                   <span className="activity-list__meta">
-                    {a.format === "quiz"
+                    {a.format === "poll"
+                      ? `${a.pollKind === "whowrote" ? "Who wrote this?" : "Poll"} · ${a.questionCount} ${a.questionCount === 1 ? "question" : "questions"}`
+                      : a.format === "quiz"
                       ? `Quiz · ${a.questionCount} ${a.questionCount === 1 ? "question" : "questions"} · ${a.kind === "team" ? "team answers" : "individual answers"}`
                       : `${a.kind === "team" ? "Team" : "Individual"} · ${schemeSummary(a)}`}
                     {pts > 0 && ` · ${pts} scored`}
-                    {(isOn || (a.format === "quiz" && view.stage.screen === "quiz" && view.quiz?.activityId === a.id)) && <span className="tag tag--on">on TV</span>}
+                    {(isOn || (a.format === "quiz" && view.stage.screen === "quiz" && view.quiz?.activityId === a.id) || (a.format === "poll" && view.stage.screen === "poll" && view.poll?.activityId === a.id)) && <span className="tag tag--on">on TV</span>}
                     {a.resultsShown && !isOn && <span className="tag">results shown</span>}
                   </span>
                 </button>
@@ -172,6 +176,8 @@ function tvStatus(view: HostView): string {
       return "Welcome screen";
     case "missions":
       return "The secret missions reveal";
+    case "poll":
+      return view.poll && view.poll.index >= 0 ? `${a?.name ?? "Poll"}, question ${view.poll.index + 1}` : (a?.name ?? "Poll");
     default:
       return view.naming.phase === "open" ? "Team naming" : "The teams";
   }
@@ -270,14 +276,14 @@ interface PadProps {
 
 function ActivityPad(props: PadProps) {
   const { activity: a, view, run, players, serverNow, onEdit } = props;
-  if (a.format === "quiz") {
+  if (a.format === "quiz" || a.format === "poll") {
     const hasPoints = view.ledger.some((e) => e.activityId === a.id && !e.voided);
     return (
       <div className="pad">
         <header className="pad__head">
           <div>
             <h3 className="pad__title">{a.name}</h3>
-            <p className="host__muted pad__summary">{quizSummary(a)}</p>
+            <p className="host__muted pad__summary">{a.format === "poll" ? pollSummary(a) : quizSummary(a)}</p>
           </div>
           <div className="pad__tools">
             <button className="btn btn--small btn--ghost" onClick={onEdit}>
@@ -300,7 +306,11 @@ function ActivityPad(props: PadProps) {
             )}
           </div>
         </header>
-        <QuizPad activity={a} view={view} run={run} players={players} serverNow={serverNow} />
+        {a.format === "poll" ? (
+          <PollPad activity={a} view={view} run={run} players={players} serverNow={serverNow} />
+        ) : (
+          <QuizPad activity={a} view={view} run={run} players={players} serverNow={serverNow} />
+        )}
       </div>
     );
   }
@@ -670,6 +680,8 @@ function ActivityForm({ run, activity, onDone }: { run: Run; activity?: Activity
   const [perCorrect, setPerCorrect] = useState(String(activity?.perCorrect ?? 1));
   const [description, setDescription] = useState(activity?.description ?? "");
   const [timer, setTimer] = useState(activity?.timerSeconds ? String(activity.timerSeconds) : "");
+  const [pollKind, setPollKind] = useState<PollKind>(activity?.pollKind ?? "general");
+  const [foolBonus, setFoolBonus] = useState(String(activity?.foolBonus ?? 3));
   const [busy, setBusy] = useState(false);
 
   const parsedPlaces = placements
@@ -681,13 +693,16 @@ function ActivityForm({ run, activity, onDone }: { run: Run; activity?: Activity
     e.preventDefault();
     setBusy(true);
     const quiz = format === "quiz";
+    const onPhones = format !== "live";
     const payload = {
       name,
       format,
       speedBonus: quiz ? Number(speedBonus) || 0 : 0,
-      questionSeconds: quiz ? Math.max(0, Number(questionSeconds) || 0) : 30,
-      kind,
-      scoring: quiz ? "perCorrect" : scoring,
+      questionSeconds: onPhones ? Math.max(0, Number(questionSeconds) || 0) : 30,
+      kind: format === "poll" ? "individual" : kind,
+      scoring: onPhones ? "perCorrect" : scoring,
+      pollKind,
+      foolBonus: format === "poll" && pollKind === "whowrote" ? Math.max(0, Number(foolBonus) || 0) : 0,
       placements: parsedPlaces,
       perCorrect: Number(perCorrect) || 1,
       description,
@@ -711,8 +726,44 @@ function ActivityForm({ run, activity, onDone }: { run: Run; activity?: Activity
       <Fieldset legend="Format">
         <Radio name="format" checked={format === "live"} onChange={() => setFormat("live")} title="Played in the room" body="You award the points as it's played." />
         <Radio name="format" checked={format === "quiz"} onChange={() => setFormat("quiz")} title="Quiz on phones" body="Questions on the TV, answers on phones, marked automatically." />
+        <Radio name="format" checked={format === "poll"} onChange={() => setFormat("poll")} title="Poll on phones" body="Everyone votes on their phone: for each other, the teams, or your own options." />
       </Fieldset>
-      {format === "quiz" ? (
+      {format === "poll" ? (
+        <>
+          <Fieldset legend="Kind of poll">
+            <Radio name="pollKind" checked={pollKind === "general"} onChange={() => setPollKind("general")} title="General polls" body="Vote for a guest, a team or your own options. Each question scores its own way." />
+            <Radio
+              name="pollKind"
+              checked={pollKind === "whowrote"}
+              onChange={() => setPollKind("whowrote")}
+              title="Who wrote this?"
+              body="Guests' secret facts, shown anonymously. Everyone guesses whose it is."
+            />
+          </Fieldset>
+          <div className="qform__row">
+            {pollKind === "whowrote" && (
+              <>
+                <label className="field field--inline">
+                  <span className="field__label">Points per right guess</span>
+                  <input className="input input--small input--num" type="number" min={1} value={perCorrect} onChange={(e) => setPerCorrect(e.target.value)} />
+                </label>
+                <label className="field field--inline">
+                  <span className="field__label">Bonus for the writer who fools the most people (0 for none)</span>
+                  <input className="input input--small input--num" type="number" min={0} value={foolBonus} onChange={(e) => setFoolBonus(e.target.value)} />
+                </label>
+              </>
+            )}
+            <label className="field field--inline">
+              <span className="field__label">Seconds per question (0 for no timer)</span>
+              <input className="input input--small input--num" type="number" min={0} value={questionSeconds} onChange={(e) => setQuestionSeconds(e.target.value)} />
+            </label>
+          </div>
+          <p className="host__muted">
+            {pollKind === "whowrote" ? "You'll choose which facts to use, and their order, after saving." : "You'll write the questions after saving."} Votes stay
+            hidden until you reveal them, and nobody can vote for themselves.
+          </p>
+        </>
+      ) : format === "quiz" ? (
         <>
           <Fieldset legend="Who answers">
             <Radio name="kind" checked={kind === "team"} onChange={() => setKind("team")} title="Teams" body="One shared answer per team, from either phone." />

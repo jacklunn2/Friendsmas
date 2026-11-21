@@ -245,6 +245,27 @@ function NowPanel({ view, run, serverNow }: { view: HostView; run: Run; serverNo
       hint = `That was the last question in ${quizName}. Points stay hidden until now.`;
       onClick = () => act("results.show", { activityId: qz.activityId });
     }
+  } else if (view.stage.screen === "poll" && view.poll && !view.intermission) {
+    const pl = view.poll;
+    const pollName = view.activities.find((a) => a.id === pl.activityId)?.name ?? "The poll";
+    if (pl.phase === "intro") {
+      label = "Open question 1";
+      hint = `${pollName} is on the TV. Open the first question when everyone's ready.`;
+      onClick = () => act("poll.open");
+    } else if (pl.phase === "open" || pl.phase === "closed") {
+      const left = pl.endsAt ? ` · ${formatClock(pl.endsAt - serverNow())} left` : "";
+      label = "Reveal the votes";
+      hint = `Question ${pl.index + 1} of ${pl.total}: ${view.pollVotes.length} voted${pl.phase === "open" ? left : " · voting closed"}`;
+      onClick = () => act("poll.reveal");
+    } else if (pl.index + 1 < pl.total) {
+      label = `Open question ${pl.index + 2}`;
+      hint = `${pl.total - pl.index - 1} to go in ${pollName}.`;
+      onClick = () => act("poll.open");
+    } else {
+      label = "Show the round results";
+      hint = `That was the last question in ${pollName}. Points stay hidden until now.`;
+      onClick = () => act("results.show", { activityId: pl.activityId });
+    }
   } else {
     const anyPoints = view.ledger.some((e) => !e.voided);
     const onBoard = view.stage.screen === "standings" || view.stage.screen === "final";
