@@ -25,6 +25,7 @@ import {
 } from "./common";
 import { pick, randomDigits, randomToken, shuffle } from "./random";
 import { guestsHost, guestsPlayer } from "./guests";
+import { pollsHost, pollsPlayer } from "./polls";
 import { autoAssignMission, clearMissionAssignments, missionsHost, missionsPlayer } from "./missions";
 import { quizAlarm, quizHost, quizPlayer } from "./quiz";
 import { scoringHost } from "./scoring";
@@ -491,6 +492,7 @@ const host: Record<string, Handler> = {
   ...guestsHost,
   ...showHost,
   ...missionsHost,
+  ...pollsHost,
 };
 
 const player: Record<string, Handler> = {
@@ -561,6 +563,7 @@ const player: Record<string, Handler> = {
   ...quizPlayer,
   ...guestsPlayer,
   ...missionsPlayer,
+  ...pollsPlayer,
 };
 
 /** Runs one client request against the state. Mutates `s` in place. */

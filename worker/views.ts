@@ -17,6 +17,7 @@ import type {
 import { revealedIds, spinCooldownUntil } from "./logic";
 import { foodWarnings, menuView, questionnaireView } from "./guests";
 import { hostMissionsView, missionsRevealView, myMissionView } from "./missions";
+import { hostPollVotes, isMyFact, myPollVote, pollQuestionView, pollView } from "./polls";
 import { hostQuizAnswers, myQuizAnswer, questionView, quizView } from "./quiz";
 import { liveEntries, rank, standingsStale, standingsView, totalsFrom } from "./scoring";
 import type { Activity, ServerPlayer, ServerState } from "./state";
@@ -103,6 +104,7 @@ function base(s: ServerState, viewer: Viewer, now: number): PublicView {
     blackout: s.blackout,
     results: resultsView(s),
     quiz: quizView(s, true),
+    poll: pollView(s),
     agenda: s.agenda.map((a) => ({ ...a })),
   };
 }
@@ -114,7 +116,9 @@ function activityView(a: Activity): ActivityView {
     format: a.format ?? "live",
     speedBonus: a.speedBonus ?? 0,
     questionSeconds: a.questionSeconds ?? 30,
-    questionCount: a.questions?.length ?? 0,
+    questionCount: a.format === "poll" ? (a.polls?.length ?? 0) : (a.questions?.length ?? 0),
+    pollKind: a.pollKind ?? "general",
+    foolBonus: a.foolBonus ?? 0,
     kind: a.kind,
     scoring: a.scoring,
     placements: a.placements,
@@ -162,6 +166,8 @@ export function playerView(s: ServerState, playerId: string | null, now: number)
     me,
     myQuestionnaire: questionnaireView(raw?.answers),
     myMission: myMissionView(s, raw?.id ?? null),
+    myPollVote: myPollVote(s, raw?.id ?? null),
+    myFactOnTv: isMyFact(s, raw?.id ?? null),
     myPoints: raw ? (s.snapshots.at(-1)?.players[raw.id] ?? 0) : 0,
     myQuizAnswer: myQuizAnswer(s, raw?.id ?? null),
     myTeam:
@@ -223,5 +229,7 @@ export function hostView(s: ServerState, audit: AuditEntry[], now: number): Host
     ),
     foodWarnings: foodWarnings(s),
     missions: hostMissionsView(s),
+    polls: Object.fromEntries(s.activities.filter((a) => a.format === "poll").map((a) => [a.id, (a.polls ?? []).map(pollQuestionView)])),
+    pollVotes: hostPollVotes(s),
   };
 }

@@ -1,5 +1,8 @@
 import type {
   AgendaItem,
+  PollKind,
+  PollOptionsKind,
+  PollScoring,
   MissionDef,
   MissionStatus,
   ActivityFormat,
@@ -130,6 +133,20 @@ export interface Activity {
   speedBonus?: number;
   questionSeconds?: number;
   questions?: Question[];
+  pollKind?: PollKind;
+  foolBonus?: number;
+  polls?: PollQuestion[];
+}
+
+export interface PollQuestion {
+  id: string;
+  prompt: string;
+  optionsKind: PollOptionsKind;
+  options: string[];
+  scoring: PollScoring;
+  points: number;
+  factId: string | null;
+  seconds: number | null;
 }
 
 /** One score change. Totals are always added up from these; nothing is ever deleted. */
@@ -251,6 +268,9 @@ export function migrate(s: ServerState): ServerState {
     a.speedBonus ??= 0;
     a.questionSeconds ??= 30;
     a.questions ??= [];
+    a.pollKind ??= "general";
+    a.foolBonus ??= 0;
+    a.polls ??= [];
   }
   return s;
 }

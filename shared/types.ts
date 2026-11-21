@@ -16,8 +16,8 @@ export type Role = "host" | "stage" | "player";
 export type ActivityKind = "team" | "individual";
 export type ScoringScheme = "placement" | "perCorrect" | "judged";
 export type EntryKind = "award" | "bonus" | "penalty";
-export type StageScreen = "teams" | "activity" | "quiz" | "results" | "standings" | "final" | "welcome" | "missions";
-export type ActivityFormat = "live" | "quiz";
+export type StageScreen = "teams" | "activity" | "quiz" | "results" | "standings" | "final" | "welcome" | "missions" | "poll";
+export type ActivityFormat = "live" | "quiz" | "poll";
 export type QuestionType = "choice" | "truefalse" | "number" | "text";
 export type QuizPhase = "intro" | "open" | "closed" | "revealed";
 
@@ -94,6 +94,10 @@ export interface ActivityView {
   /** Quiz only: default seconds per question (0 = no timer). */
   questionSeconds: number;
   questionCount: number;
+  /** Poll only: general polls, or "Who wrote this?" with the guests' secret facts. */
+  pollKind: PollKind;
+  /** "Who wrote this?" only: bonus for the writers who fool the most people. */
+  foolBonus: number;
 }
 
 /** A quiz question as the host edits it. Never sent to guests or the TV. */
@@ -231,6 +235,8 @@ export interface PublicView {
   results: ResultsView | null;
   /** The quiz on the TV, if any. */
   quiz: QuizView | null;
+  /** The poll on the TV, if any. */
+  poll: PollView | null;
   /** The day's running order, written by the host, for the welcome screen. */
   agenda: AgendaItem[];
 }
@@ -259,6 +265,10 @@ export interface PlayerView extends PublicView {
   myTeam: MyTeamView | null;
   /** This guest's share of their team's points at the last reveal. */
   myPoints: number;
+  /** Their vote on the open poll question, as an option key. */
+  myPollVote: string | null;
+  /** True while the fact on the TV is this guest's own (they sit it out). */
+  myFactOnTv: boolean;
   /** Their (or their team's) answer to the open quiz question. */
   myQuizAnswer: MyQuizAnswer | null;
   /** Names on the guest list that can still be claimed. */
@@ -311,6 +321,88 @@ export interface FoodWarning {
   message: string;
   /** For duplicates: the guests bringing the same thing. */
   playerIds: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Polls on phones (Block 6)
+
+export type PollKind = "general" | "whowrote";
+/** What guests vote between: each other (with photos), the teams, or the host's own options. */
+export type PollOptionsKind = "players" | "teams" | "custom";
+/** "winner": points to whoever (or whichever team) gets the most votes. "majority": points to everyone who voted with the majority. */
+export type PollScoring = "winner" | "majority" | "none";
+export const POLL_OPTIONS_KIND_LABEL: Record<PollOptionsKind, string> = { players: "Guests", teams: "Teams", custom: "Your own options" };
+export const POLL_SCORING_LABEL: Record<PollScoring, string> = {
+  winner: "Points for the winner",
+  majority: "Points for voting with the majority",
+  none: "Just for fun",
+};
+
+/** A poll question as the host edits it. */
+export interface PollQuestionView {
+  id: string;
+  prompt: string;
+  optionsKind: PollOptionsKind;
+  /** Custom options only. */
+  options: string[];
+  scoring: PollScoring;
+  points: number;
+  /** "Who wrote this?": the secret fact this question uses. */
+  factId: string | null;
+  /** Overrides the activity's seconds per question; 0 = no timer. */
+  seconds: number | null;
+}
+
+/** One thing to vote for. The key is a guest id, a team id, or the custom option's index. */
+export interface PollOptionView {
+  key: string;
+  label: string;
+}
+
+export interface PollView {
+  activityId: string;
+  pollKind: PollKind;
+  phase: QuizPhase;
+  index: number;
+  total: number;
+  endsAt: number | null;
+  question: {
+    id: string;
+    number: number;
+    /** For "Who wrote this?", the secret fact (shown anonymously). */
+    prompt: string;
+    optionsKind: PollOptionsKind;
+    options: PollOptionView[];
+    scoring: PollScoring;
+    points: number;
+    /** "Who wrote this?": the writer sits this one out. */
+    writerSitsOut: boolean;
+  } | null;
+  /** Who has voted on the current question. */
+  answeredIds: string[];
+  /** Only once revealed. */
+  reveal: PollReveal | null;
+}
+
+export interface PollReveal {
+  /** option key → number of votes */
+  counts: Record<string, number>;
+  /** voter id → option key */
+  votes: Record<string, string>;
+  /** The option keys with the most votes (several when tied). */
+  winners: string[];
+  /** "Who wrote this?": who wrote the fact, and who guessed right. */
+  writerId: string | null;
+  correctIds: string[];
+  /** Points each guest earned on this question (voters, or a winning guest). */
+  points: Record<string, number>;
+}
+
+/** The host's live view of the votes on the open question. */
+export interface HostPollVote {
+  voterId: string;
+  key: string;
+  at: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -420,6 +512,10 @@ export interface HostView extends PublicView {
   questionnaires: Record<string, QuestionnaireView>;
   foodWarnings: FoodWarning[];
   missions: HostMissionsView;
+  /** Every poll activity's questions, by activity. */
+  polls: Record<string, PollQuestionView[]>;
+  /** Votes on the open poll question, for the presenter view. */
+  pollVotes: HostPollVote[];
 }
 
 export type AnyView = PlayerView | StageView | HostView;

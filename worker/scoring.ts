@@ -12,6 +12,7 @@ import {
   ordinal,
   type ActivityFormat,
   type ActivityKind,
+  type PollKind,
   type ScoringScheme,
   type StandingsRow,
   type StandingsView,
@@ -107,12 +108,15 @@ function findActivity(s: ServerState, id: unknown): Activity {
 
 function activityFields(p: Payload) {
   const name = str(p, "name", { max: ACTIVITY_NAME_MAX, label: "a name for the activity" });
-  const format: ActivityFormat = p.format === "quiz" ? "quiz" : "live";
+  const format: ActivityFormat = p.format === "quiz" ? "quiz" : p.format === "poll" ? "poll" : "live";
+  const pollKind: PollKind = p.pollKind === "whowrote" ? "whowrote" : "general";
+  const foolBonus = p.foolBonus === undefined ? 0 : int(p, "foolBonus", { min: 0, max: MAX_POINTS, label: "the bonus for fooling people" });
   const speedBonus = p.speedBonus === undefined ? 0 : int(p, "speedBonus", { min: 0, max: MAX_POINTS, label: "the speed bonus" });
   const questionSeconds = p.questionSeconds === undefined ? 30 : int(p, "questionSeconds", { min: 0, max: 600, label: "the time per question" });
-  const kind = p.kind as ActivityKind;
+  // Everyone votes for themselves in a poll; their points go to their team.
+  const kind = (format === "poll" ? "individual" : p.kind) as ActivityKind;
   if (kind !== "team" && kind !== "individual") throw new UserError("Choose whether teams or individuals play.");
-  const scoring = (format === "quiz" ? "perCorrect" : p.scoring) as ScoringScheme;
+  const scoring = (format === "quiz" || format === "poll" ? "perCorrect" : p.scoring) as ScoringScheme;
   if (scoring !== "placement" && scoring !== "perCorrect" && scoring !== "judged") {
     throw new UserError("Choose how the activity is scored.");
   }
@@ -131,7 +135,7 @@ function activityFields(p: Payload) {
   const perCorrect = p.perCorrect === undefined ? 1 : int(p, "perCorrect", { min: 1, max: MAX_POINTS, label: "points per correct answer" });
   const timerSeconds = p.timerSeconds === undefined ? 0 : int(p, "timerSeconds", { min: 0, max: MAX_TIMER_SECONDS, label: "the timer" });
   const description = text(p, "description", DESCRIPTION_MAX, "the instructions");
-  return { name, format, kind, scoring, placements, perCorrect, timerSeconds, description, speedBonus, questionSeconds };
+  return { name, format, kind, scoring, placements, perCorrect, timerSeconds, description, speedBonus, questionSeconds, pollKind, foolBonus };
 }
 
 function entriesFor(s: ServerState, activityId: string) {
@@ -165,7 +169,7 @@ export const scoringHost: Record<string, Handler> = {
   "activity.create": (s, _a, p, now) => {
     const f = activityFields(p);
     if (s.activities.length >= 60) throw new UserError("That's a lot of activities. Remove some first.");
-    const a: Activity = { id: newId(s, "a"), ...f, resultsShown: false, createdAt: now, questions: [] };
+    const a: Activity = { id: newId(s, "a"), ...f, resultsShown: false, createdAt: now, questions: [], polls: [] };
     s.activities.push(a);
     return { data: { id: a.id }, audit: ["activity.create", a.name] };
   },
@@ -174,7 +178,7 @@ export const scoringHost: Record<string, Handler> = {
     const a = findActivity(s, p.id);
     const f = activityFields(p);
     const used = entriesFor(s, a.id).some((e) => !e.voided);
-    if (used && (f.kind !== a.kind || f.scoring !== a.scoring || f.format !== (a.format ?? "live"))) {
+    if (used && (f.kind !== a.kind || f.scoring !== a.scoring || f.format !== (a.format ?? "live") || f.pollKind !== (a.pollKind ?? "general"))) {
       throw new UserError("Points have been awarded in this activity, so its type and scoring can't change. Void them first.");
     }
     Object.assign(a, f);
@@ -316,6 +320,7 @@ export const scoringHost: Record<string, Handler> = {
     if (screen === "activity") {
       const a = findActivity(s, p.activityId);
       if (a.format === "quiz") throw new UserError("Use Start the quiz for quizzes.");
+      if (a.format === "poll") throw new UserError("Use Start the poll for polls.");
       const timer = a.timerSeconds ? { endsAt: null, remainingMs: a.timerSeconds * 1000, durationMs: a.timerSeconds * 1000 } : null;
       s.stage = { screen: "activity", activityId: a.id, timer };
       return { audit: ["stage.show", `${a.name} on the TV`] };

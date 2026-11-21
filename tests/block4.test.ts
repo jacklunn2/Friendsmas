@@ -19,9 +19,9 @@ function setup(n: number) {
 
 const as = (s: ServerState, i: number): Actor => ({ role: "player", playerId: s.players[i].id });
 
-/** Everything every phone and the TV are sent, as one string. */
+/** Everything every phone and the TV are sent, as one string (minus each guest's own answers, which they wrote). */
 function publicJson(s: ServerState) {
-  return JSON.stringify([stageView(s, T0), ...s.players.map((p) => playerView(s, p.id, T0)), playerView(s, null, T0)]);
+  return JSON.stringify([stageView(s, T0), ...s.players.map((p) => ({ ...playerView(s, p.id, T0), myQuestionnaire: null })), playerView(s, null, T0)]);
 }
 
 function answers(dish: string, category: string, facts = ["I once met a famous goat"]) {
@@ -244,5 +244,127 @@ describe("secret missions", () => {
     runAction(s, HOST, "event.startFresh", { confirm: "START FRESH" }, T0);
     expect(s.missions.assigned).toEqual({});
     expect(s.missions.list).toHaveLength(n);
+  });
+});
+
+describe("polls on phones", () => {
+  /** Six guests in three pairs, drawn, with answers so "Who wrote this?" has facts. */
+  function pollSetup() {
+    const s = setup(6);
+    s.players.forEach((_, i) => runAction(s, as(s, i), "player.answers", answers(`Dish ${i}`, "main", [`Secret ${i}`]), T0));
+    drawTeams(s);
+    return s;
+  }
+  const vote = (s: ServerState, i: number, key: string) =>
+    runAction(s, as(s, i), "poll.vote", { questionId: s.activities.at(-1)!.polls![s.quiz.index].id, key }, T0 + 10);
+
+  it("hides votes until the reveal, and stops guests voting for themselves", () => {
+    const s = pollSetup();
+    const { id } = runAction(s, HOST, "activity.create", { name: "Superlatives", format: "poll", perCorrect: 1 }, T0).data as { id: string };
+    runAction(s, HOST, "poll.question.save", { activityId: id, question: { prompt: "Most likely to cry at a Christmas advert", optionsKind: "players", scoring: "winner", points: 3 } }, T0);
+    runAction(s, HOST, "poll.start", { activityId: id }, T0);
+    runAction(s, HOST, "poll.open", {}, T0);
+    const [a, b, c] = s.players;
+    expect(() => vote(s, 0, a.id)).toThrow(/yourself/);
+    vote(s, 0, b.id);
+    vote(s, 2, b.id);
+    vote(s, 1, c.id);
+    const tv = stageView(s, T0).poll!;
+    expect(tv.answeredIds.sort()).toEqual([a.id, b.id, c.id].sort());
+    expect(tv.reveal).toBeNull();
+    expect(JSON.stringify(stageView(s, T0))).not.toContain(`"value"`);
+    expect(playerView(s, a.id, T0).myPollVote).toBe(b.id);
+    runAction(s, HOST, "poll.reveal", {}, T0 + 20);
+    const r = stageView(s, T0).poll!.reveal!;
+    expect(r.counts[b.id]).toBe(2);
+    expect(r.winners).toEqual([b.id]);
+    // The winner's team gets the points, credited to them, hidden until the results.
+    const e = s.ledger.filter((x) => !x.voided && x.activityId === id);
+    expect(e).toMatchObject([{ playerId: b.id, teamId: b.teamId, points: 3, revealed: false }]);
+    expect(() => vote(s, 3, a.id)).toThrow(/closed/);
+  });
+
+  it("scores voting with the majority, shares ties, and can be just for fun", () => {
+    const s = pollSetup();
+    const { id } = runAction(s, HOST, "activity.create", { name: "Hot takes", format: "poll" }, T0).data as { id: string };
+    runAction(s, HOST, "poll.question.save", { activityId: id, question: { prompt: "Best Christmas film", optionsKind: "custom", options: ["Elf", "Die Hard", "Love Actually"], scoring: "majority", points: 2 } }, T0);
+    runAction(s, HOST, "poll.question.save", { activityId: id, question: { prompt: "Best team", optionsKind: "teams", scoring: "none" } }, T0);
+    expect(() =>
+      runAction(s, HOST, "poll.question.save", { activityId: id, question: { prompt: "x", optionsKind: "custom", options: ["a", "b"], scoring: "winner", points: 1 } }, T0),
+    ).toThrow(/can't win points/);
+    runAction(s, HOST, "poll.start", { activityId: id }, T0);
+    runAction(s, HOST, "poll.open", {}, T0);
+    vote(s, 0, "0");
+    vote(s, 1, "0");
+    vote(s, 2, "1");
+    vote(s, 3, "1");
+    vote(s, 4, "2");
+    runAction(s, HOST, "poll.reveal", {}, T0 + 20);
+    expect(stageView(s, T0).poll!.reveal!.winners.sort()).toEqual(["0", "1"]);
+    const paid = s.ledger.filter((x) => !x.voided && x.activityId === id).map((x) => x.playerId).sort();
+    expect(paid).toEqual([s.players[0].id, s.players[1].id, s.players[2].id, s.players[3].id].sort());
+    // Teams: can't vote for your own, and "just for fun" scores nothing.
+    runAction(s, HOST, "poll.open", {}, T0 + 30);
+    expect(() => vote(s, 0, s.players[0].teamId!)).toThrow(/own team/);
+    const other = s.teams.find((t) => t.id !== s.players[0].teamId)!;
+    vote(s, 0, other.id);
+    runAction(s, HOST, "poll.reveal", {}, T0 + 40);
+    expect(s.ledger.filter((x) => !x.voided && x.activityId === id)).toHaveLength(4);
+  });
+
+  it("plays Who wrote this? with secret facts: points for right guesses, a bonus for the best fooler", () => {
+    const s = pollSetup();
+    const { id } = runAction(s, HOST, "activity.create", { name: "Who wrote this?", format: "poll", pollKind: "whowrote", perCorrect: 2, foolBonus: 5 }, T0).data as { id: string };
+    const fact0 = s.players[0].answers!.facts[0];
+    const fact1 = s.players[1].answers!.facts[0];
+    runAction(s, HOST, "poll.question.save", { activityId: id, question: { factId: fact0.id } }, T0);
+    runAction(s, HOST, "poll.question.save", { activityId: id, question: { factId: fact1.id } }, T0);
+    expect(() => runAction(s, HOST, "poll.question.save", { activityId: id, question: { factId: fact1.id } }, T0)).toThrow(/already/);
+    expect(() => runAction(s, HOST, "poll.question.save", { activityId: id, question: { factId: "nope" } }, T0)).toThrow(/secret facts/);
+    // The facts stay secret until their question is open.
+    runAction(s, HOST, "poll.start", { activityId: id }, T0);
+    expect(publicJson(s)).not.toContain("Secret 0");
+    runAction(s, HOST, "poll.open", {}, T0);
+    const tv = stageView(s, T0).poll!;
+    expect(tv.question!.prompt).toBe("Secret 0");
+    expect(JSON.stringify(tv)).not.toContain(`"writerId":"${s.players[0].id}"`);
+    expect(publicJson(s)).not.toContain("Secret 1");
+    expect(playerView(s, s.players[0].id, T0).myFactOnTv).toBe(true);
+    expect(() => vote(s, 0, s.players[1].id)).toThrow(/yours/);
+    // Fact 0 (Guest 1's): two right, three fooled.
+    const [p0, p1, p2] = s.players.map((p) => p.id);
+    vote(s, 1, p0);
+    vote(s, 2, p0);
+    vote(s, 3, p1);
+    vote(s, 4, p2);
+    vote(s, 5, p1);
+    runAction(s, HOST, "poll.reveal", {}, T0 + 20);
+    const r = stageView(s, T0).poll!.reveal!;
+    expect(r.writerId).toBe(p0);
+    expect(r.correctIds.sort()).toEqual([p1, p2].sort());
+    const live = () => s.ledger.filter((x) => !x.voided && x.activityId === id);
+    expect(live().filter((e) => e.points === 2)).toHaveLength(2);
+    expect(live().filter((e) => e.points === 5).map((e) => e.playerId)).toEqual([p0]);
+    // Fact 1 (Guest 2's): fools four, so the bonus moves to Guest 2.
+    runAction(s, HOST, "poll.open", {}, T0 + 30);
+    vote(s, 0, p2);
+    vote(s, 2, s.players[3].id);
+    vote(s, 3, s.players[4].id);
+    vote(s, 4, s.players[5].id);
+    vote(s, 5, p0);
+    runAction(s, HOST, "poll.reveal", {}, T0 + 40);
+    expect(live().filter((e) => e.points === 5).map((e) => e.playerId)).toEqual([p1]);
+    expect(s.ledger.filter((e) => e.points === 5 && e.voided)).toHaveLength(1);
+  });
+
+  it("lets the host choose which facts to use and their order", () => {
+    const s = pollSetup();
+    const { id } = runAction(s, HOST, "activity.create", { name: "Who wrote this?", format: "poll", pollKind: "whowrote" }, T0).data as { id: string };
+    for (const i of [2, 0, 4]) runAction(s, HOST, "poll.question.save", { activityId: id, question: { factId: s.players[i].answers!.facts[0].id } }, T0);
+    const first = s.activities.at(-1)!.polls![0].id;
+    runAction(s, HOST, "poll.question.move", { activityId: id, questionId: first, direction: "down" }, T0);
+    expect(hostView(s, [], T0).polls[id].map((q) => q.factId)).toEqual([0, 2, 4].map((i) => s.players[i].answers!.facts[0].id));
+    runAction(s, HOST, "poll.question.delete", { activityId: id, questionId: first }, T0);
+    expect(hostView(s, [], T0).polls[id]).toHaveLength(2);
   });
 });
