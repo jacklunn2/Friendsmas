@@ -3211,7 +3211,7 @@ img.member__emoji {
   font-weight: 400;
   color: var(--frost);
   word-break: break-all;
-  max-width: 14vw;
+  max-width: 22vw;
 }
 .welcome__qr {
   width: min(13vw, 26vh);
