@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode";
-import { FINAL_REVEAL_MS, SPIN_MS, teamDisplayName, type RevealEventView, type StageView } from "../../../shared/types";
+import { FINAL_REVEAL_MS, SPIN_MS, photoUrl, teamDisplayName, type RevealEventView, type StageView } from "../../../shared/types";
 import { audioOn, enableAudio, sfx } from "../audio";
 import { storage, useRoom, useTicker } from "../net";
 import { Avatar, ConnectionBanner, EventCodeContext, formatClock, playerMap, TeamCard, teamStyle, Wordmark } from "../ui";
@@ -243,7 +243,7 @@ function Draw({ view, anim, onLanded, onSpin }: { view: StageView; anim: Anim | 
   const players = useMemo(() => playerMap(view.players), [view.players]);
   const wheelNames = view.draw.pool.map((id) => {
     const p = players.get(id);
-    return { id, name: p?.name ?? "?", emoji: p?.emoji ?? "" };
+    return { id, name: p?.name ?? "?", emoji: p?.emoji ?? "", photo: p ? photoUrl(p, view.eventCode) : null };
   });
   const spinTarget = anim?.kind === "spin" ? anim.event.playerIds[0] : null;
   const landed = anim?.kind === "spin" && anim.phase === "landed";

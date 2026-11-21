@@ -4,6 +4,8 @@ export interface WheelName {
   id: string;
   name: string;
   emoji: string;
+  /** The guest's selfie URL, or null to show their emoji instead. */
+  photo: string | null;
 }
 
 interface Props {
@@ -50,6 +52,10 @@ export function Wheel({ names, spin, durationMs, winnerId, onTick, onLanded, onH
   const n = names.length;
   const seg = n > 0 ? 360 / n : 360;
   const fontSize = n <= 6 ? 21 : n <= 9 ? 18 : 15.5;
+  // Each segment carries a round selfie near the rim, sized to fit its slice.
+  const photoR = Math.min(40, ((Math.PI * (R - 56)) / Math.max(n, 1)) * 0.8);
+  const photoX = R - photoR - 12;
+  const maxChars = n <= 6 ? 12 : n <= 9 ? 10 : 9;
 
   const callbacks = useRef({ onTick, onLanded });
   callbacks.current = { onTick, onLanded };
@@ -123,6 +129,10 @@ export function Wheel({ names, spin, durationMs, winnerId, onTick, onLanded, onH
             <stop offset="0.95" stopColor="#f2b544" stopOpacity="0.18" />
             <stop offset="1" stopColor="#f2b544" stopOpacity="0" />
           </radialGradient>
+          {/* In each label's own (rotated) coordinates, so one clip fits every segment. */}
+          <clipPath id="wheel-photo-clip">
+            <circle cx={photoX} cy={0} r={photoR} />
+          </clipPath>
         </defs>
         <circle r={RIM + 22} fill="url(#rim-glow)" />
         <circle r={RIM + 13} className="wheel__rim" />
@@ -134,7 +144,7 @@ export function Wheel({ names, spin, durationMs, winnerId, onTick, onLanded, onH
             const mid = start + seg / 2;
             const fill = SEGMENT_FILLS[i % SEGMENT_FILLS.length];
             const dark = fill === "#f2b544" || fill === "#e5a83a";
-            const label = x.name.length > 14 ? `${x.name.slice(0, 13)}…` : x.name;
+            const label = x.name.length > maxChars ? `${x.name.slice(0, maxChars - 1)}…` : x.name;
             return (
               <g key={x.id} className={x.id === winnerId ? "segment is-winner" : "segment"}>
                 {n === 1 ? (
@@ -142,18 +152,43 @@ export function Wheel({ names, spin, durationMs, winnerId, onTick, onLanded, onH
                 ) : (
                   <path d={segmentPath(start, start + seg)} fill={fill} />
                 )}
-                {/* Names run from the hub out to the rim, like a real wheel. */}
+                {/* Names run from the hub out to the rim, like a real wheel, with
+                    the selfie at the rim end, upright when it reaches the pointer. */}
                 <g transform={`rotate(${mid - 90})`}>
                   <text
-                    x={R - 18}
+                    x={photoX - photoR - 10}
                     y={fontSize * 0.36}
                     textAnchor="end"
                     className="segment__label"
                     fontSize={fontSize}
                     fill={dark ? "#10241e" : "#fbfaf5"}
                   >
-                    {label} {x.emoji}
+                    {label}
                   </text>
+                  <circle cx={photoX} cy={0} r={photoR + 3} className="segment__photo-ring" />
+                  {x.photo ? (
+                    <image
+                      href={x.photo}
+                      x={photoX - photoR}
+                      y={-photoR}
+                      width={photoR * 2}
+                      height={photoR * 2}
+                      preserveAspectRatio="xMidYMid slice"
+                      clipPath="url(#wheel-photo-clip)"
+                      transform={`rotate(90 ${photoX} 0)`}
+                    />
+                  ) : (
+                    <text
+                      x={photoX}
+                      y={photoR * 0.36}
+                      textAnchor="middle"
+                      fontSize={photoR}
+                      transform={`rotate(90 ${photoX} 0)`}
+                      aria-hidden
+                    >
+                      {x.emoji}
+                    </text>
+                  )}
                 </g>
               </g>
             );

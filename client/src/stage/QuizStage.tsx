@@ -55,9 +55,15 @@ export function QuizStage({ view, serverNow }: { view: StageView; serverNow: () 
 
   const answerers =
     qz.kind === "team"
-      ? view.teams.map((t) => ({ id: t.id, team: t, label: `${t.badge} ${teamDisplayName(t)}`, player: null }))
+      ? view.teams.map((t) => ({
+          id: t.id,
+          team: t,
+          label: `${t.badge} ${teamDisplayName(t)}`,
+          player: null,
+          members: t.memberIds.map((id) => players.get(id)).filter((p) => !!p),
+        }))
       : view.teams.flatMap((t) =>
-          t.memberIds.map((id) => ({ id, team: t, label: players.get(id)?.name ?? "", player: players.get(id) ?? null })),
+          t.memberIds.map((id) => ({ id, team: t, label: players.get(id)?.name ?? "", player: players.get(id) ?? null, members: [] })),
         );
 
   return (
@@ -100,6 +106,13 @@ export function QuizStage({ view, serverNow }: { view: StageView; serverNow: () 
           return (
             <li key={x.id} className={`quiz-chip quiz-chip--${state}`} style={teamStyle(x.team)}>
               {x.player && <Avatar player={x.player} className="quiz-chip__avatar" />}
+              {x.members.length > 0 && (
+                <span className="quiz-chip__members">
+                  {x.members.map((p) => (
+                    <Avatar key={p!.id} player={p!} className="quiz-chip__avatar" />
+                  ))}
+                </span>
+              )}
               <span className="quiz-chip__name">{x.label}</span>
               {revealed && r?.value && <span className="quiz-chip__value">{r.value}</span>}
               {revealed && <span className="quiz-chip__mark">{r?.correct ? `${signed(r.points)}${r.fastest ? " ⚡" : ""}` : "✗"}</span>}

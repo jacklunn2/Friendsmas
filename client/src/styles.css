@@ -429,9 +429,9 @@ textarea {
 }
 .draw__callout {
   position: absolute;
-  bottom: 4%;
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   background: var(--pine);
   border: 0.25vw solid var(--team);
   border-radius: 1.2vw;
@@ -454,7 +454,7 @@ textarea {
 }
 @keyframes callout {
   from {
-    transform: translate(-50%, 40%) scale(0.85);
+    transform: translate(-50%, -30%) scale(0.85);
     opacity: 0;
   }
 }
@@ -558,11 +558,20 @@ textarea {
   stroke: rgba(13, 38, 32, 0.55);
   stroke-width: 2;
 }
+.segment__photo-ring {
+  fill: rgba(16, 36, 30, 0.55);
+  stroke: rgba(251, 250, 245, 0.85);
+  stroke-width: 2.5;
+}
 .segment.is-winner path,
-.segment.is-winner circle {
+.segment.is-winner > circle {
   stroke: var(--snow);
   stroke-width: 6;
   filter: brightness(1.18);
+}
+.segment.is-winner .segment__photo-ring {
+  stroke: var(--brass);
+  stroke-width: 5;
 }
 .bulb {
   fill: #fff2c2;
@@ -1322,12 +1331,13 @@ img.member__emoji {
   gap: 0.4em;
 }
 
+/* The drawn guest's selfie, full size: the moment everyone's waiting for. */
 .draw__callout-photo {
-  width: 12vw;
-  height: 12vw;
-  margin: -7.5vw auto 0.6vw;
-  font-size: 6vw;
-  border-radius: 50%;
+  width: min(42vh, 30vw);
+  height: min(42vh, 30vw);
+  margin: 0.4vw auto 0.8vw;
+  font-size: min(24vh, 16vw);
+  border-radius: 1.4vw;
   border: 0.45vw solid var(--team);
   background: var(--pine-2);
   box-shadow: 0 0 0 0.35vw var(--pine), 0 0 3vw color-mix(in srgb, var(--team) 60%, transparent);
@@ -2747,6 +2757,13 @@ img.member__emoji {
   height: 2.2vw;
   font-size: 1.3vw;
   border-radius: 50%;
+}
+.quiz-chip__members {
+  display: inline-flex;
+}
+.quiz-chip__members .quiz-chip__avatar + .quiz-chip__avatar {
+  margin-left: -0.6vw;
+  box-shadow: 0 0 0 0.15vw var(--pine-2);
 }
 .quiz-chip--in,
 .quiz-chip--right,

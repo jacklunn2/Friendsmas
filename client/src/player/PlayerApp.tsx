@@ -55,7 +55,7 @@ export function PlayerApp({ code }: { code: string }) {
           <Join view={view} send={send} />
         ) : view.me.status === "pending" ? (
           <>
-            <Waiting title={`Hi ${view.me.name} ${view.me.emoji}`} body="The host will let you in shortly. Keep this page open." />
+            <Waiting title={`Hi ${view.me.name}`} body="The host will let you in shortly. Keep this page open." />
             <section className="phone__card">
               <PhotoStep me={view.me} getToken={tokenStore.get} send={send} />
             </section>
