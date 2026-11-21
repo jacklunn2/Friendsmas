@@ -13,6 +13,7 @@ import {
 } from "../../../shared/types";
 import { revealDurationMs } from "../timing";
 import { PhoneQuiz } from "./PhoneQuiz";
+import { MissionLayer } from "./Mission";
 import { QuestionnaireForm } from "./Questionnaire";
 import { storage, useRoom, useTicker } from "../net";
 import { prepareSelfie, uploadSelfie } from "../photo";
@@ -66,7 +67,10 @@ export function PlayerApp({ code }: { code: string }) {
             )}
           </>
         ) : (
-          <InGame view={view} send={send} serverNow={serverNow} getToken={tokenStore.get} code={code} />
+          <>
+            <InGame view={view} send={send} serverNow={serverNow} getToken={tokenStore.get} code={code} />
+            {view.myMission && <MissionLayer mission={view.myMission} send={send} />}
+          </>
         )}
       </Shell>
     </EventCodeContext.Provider>

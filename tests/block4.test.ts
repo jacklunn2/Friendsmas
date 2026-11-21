@@ -115,3 +115,134 @@ describe("the welcome screen", () => {
     expect(s.agenda).toHaveLength(1);
   });
 });
+
+/** Locks and reveals the whole draw. */
+function drawTeams(s: ServerState) {
+  runAction(s, HOST, "draw.options", { revealMode: "finale" }, T0);
+  runAction(s, HOST, "draw.lock", {}, T0);
+  runAction(s, HOST, "draw.skip", {}, T0);
+  expect(s.draw.phase).toBe("complete");
+}
+
+describe("secret missions", () => {
+  it("starts with a few example missions the host can change", () => {
+    const s = setup(2);
+    const list = hostView(s, [], T0).missions.list;
+    expect(list.length).toBeGreaterThanOrEqual(5);
+    runAction(s, HOST, "missions.update", { id: list[0].id, text: "Hide a sprout in someone's drink" }, T0);
+    runAction(s, HOST, "missions.add", { text: "Get a hug from the host" }, T0);
+    runAction(s, HOST, "missions.delete", { id: list[1].id }, T0);
+    const after = hostView(s, [], T0).missions.list.map((m) => m.text);
+    expect(after[0]).toBe("Hide a sprout in someone's drink");
+    expect(after).toContain("Get a hug from the host");
+    expect(after).toHaveLength(list.length);
+  });
+
+  it("hands every guest a different mission, seen only on their own phone", () => {
+    const s = setup(6);
+    runAction(s, HOST, "missions.handOut", {}, T0);
+    const assigned = hostView(s, [], T0).missions.assignments;
+    expect(assigned).toHaveLength(6);
+    expect(new Set(assigned.map((a) => a.missionId)).size).toBe(6);
+    const mine = playerView(s, s.players[0].id, T0).myMission!;
+    expect(mine.seen).toBe(false);
+    const theirs = assigned.find((a) => a.playerId === s.players[0].id)!;
+    expect(mine.text).toBe(theirs.text);
+    // Nobody else gets it: not the TV, not another phone.
+    const others = JSON.stringify([stageView(s, T0), playerView(s, s.players[1].id, T0), playerView(s, null, T0)]);
+    expect(others).not.toContain(mine.text);
+    runAction(s, as(s, 0), "mission.seen", {}, T0);
+    expect(playerView(s, s.players[0].id, T0).myMission!.seen).toBe(true);
+  });
+
+  it("says when there aren't enough missions, and never repeats one", () => {
+    const s = setup(8);
+    const r = runAction(s, HOST, "missions.handOut", {}, T0);
+    expect(r.data).toEqual({ given: 6, short: 2 });
+    expect(() => runAction(s, HOST, "missions.redraw", { playerId: s.players[0].id }, T0)).toThrow(/no unused missions/);
+    runAction(s, HOST, "missions.add", { text: "Mission seven" }, T0);
+    runAction(s, HOST, "missions.add", { text: "Mission eight" }, T0);
+    runAction(s, HOST, "missions.handOut", {}, T0);
+    expect(new Set(Object.values(s.missions.assigned).map((a) => a.missionId)).size).toBe(8);
+    expect(() => runAction(s, HOST, "missions.handOut", {}, T0)).toThrow(/already has a mission/);
+  });
+
+  it("can hand missions out as guests join", () => {
+    const s = freshState(T0);
+    runAction(s, HOST, "missions.auto", { on: true }, T0);
+    runAction(s, HOST, "guest.add", { names: "Zed" }, T0);
+    runAction(s, { role: "player", playerId: null }, "player.claim", { playerId: s.players[0].id, emoji: "🎅" }, T0);
+    expect(playerView(s, s.players[0].id, T0).myMission).not.toBeNull();
+  });
+
+  it("lets the host choose or redraw a mission, but not one someone else has", () => {
+    const s = setup(2);
+    runAction(s, HOST, "missions.handOut", {}, T0);
+    const [a, b] = hostView(s, [], T0).missions.assignments;
+    expect(() => runAction(s, HOST, "missions.assign", { playerId: a.playerId, missionId: b.missionId }, T0)).toThrow(/already has/);
+    expect(() => runAction(s, HOST, "missions.delete", { id: a.missionId }, T0)).toThrow(/Redraw/);
+    runAction(s, HOST, "missions.redraw", { playerId: a.playerId }, T0);
+    const now = s.missions.assigned[a.playerId];
+    expect(now.missionId).not.toBe(a.missionId);
+    expect(now.missionId).not.toBe(b.missionId);
+    runAction(s, HOST, "missions.assign", { playerId: a.playerId, missionId: a.missionId }, T0);
+    expect(s.missions.assigned[a.playerId].missionId).toBe(a.missionId);
+  });
+
+  it("gives +5 to the team for a completed mission, hidden until the next reveal, and voids it if noticed", () => {
+    const s = setup(4);
+    drawTeams(s);
+    runAction(s, HOST, "missions.handOut", {}, T0);
+    const pid = s.players[0].id;
+    const team = s.players[0].teamId!;
+    runAction(s, HOST, "missions.complete", { playerId: pid }, T0);
+    expect(hostView(s, [], T0).liveTotals[team]).toBe(5);
+    const entry = s.ledger.at(-1)!;
+    expect(entry).toMatchObject({ playerId: pid, teamId: team, points: 5, revealed: false });
+    // Still a secret: not on the TV, and the guest's phone doesn't say "completed" yet.
+    expect(stageView(s, T0).standings).toBeNull();
+    expect(playerView(s, pid, T0).myMission!.status).toBe("active");
+    runAction(s, HOST, "standings.reveal", {}, T0 + 1);
+    expect(stageView(s, T0).standings!.rows.find((r) => r.teamId === team)!.points).toBe(5);
+    expect(playerView(s, pid, T0).myMission!.status).toBe("completed");
+    // Noticed after all: the +5 is voided, not deleted.
+    runAction(s, HOST, "missions.notice", { playerId: pid }, T0 + 2);
+    expect(s.ledger.find((e) => e.id === entry.id)!.voided).toBe(true);
+    expect(hostView(s, [], T0).liveTotals[team]).toBe(0);
+    expect(playerView(s, pid, T0).myMission!.status).toBe("noticed");
+    // And back again.
+    runAction(s, HOST, "missions.complete", { playerId: pid }, T0 + 3);
+    expect(hostView(s, [], T0).liveTotals[team]).toBe(5);
+    expect(s.ledger.filter((e) => e.reason === "Secret mission")).toHaveLength(2);
+  });
+
+  it("needs the teams drawn before a mission can score", () => {
+    const s = setup(2);
+    runAction(s, HOST, "missions.handOut", {}, T0);
+    expect(() => runAction(s, HOST, "missions.complete", { playerId: s.players[0].id }, T0)).toThrow(/team draw/);
+  });
+
+  it("reveals every mission on the TV only when the host chooses", () => {
+    const s = setup(4);
+    drawTeams(s);
+    expect(() => runAction(s, HOST, "stage.show", { screen: "missions" }, T0)).toThrow(/Hand out/);
+    runAction(s, HOST, "missions.handOut", {}, T0);
+    runAction(s, HOST, "missions.complete", { playerId: s.players[1].id }, T0);
+    runAction(s, HOST, "missions.notice", { playerId: s.players[2].id }, T0);
+    expect(stageView(s, T0).missionsReveal).toBeNull();
+    runAction(s, HOST, "stage.show", { screen: "missions" }, T0);
+    const rows = stageView(s, T0).missionsReveal!;
+    expect(rows).toHaveLength(4);
+    expect(rows[0]).toMatchObject({ playerId: s.players[1].id, status: "completed" });
+    expect(rows[1]).toMatchObject({ playerId: s.players[2].id, status: "noticed" });
+  });
+
+  it("forgets who had which mission when starting fresh, but keeps the list", () => {
+    const s = setup(2);
+    runAction(s, HOST, "missions.handOut", {}, T0);
+    const n = s.missions.list.length;
+    runAction(s, HOST, "event.startFresh", { confirm: "START FRESH" }, T0);
+    expect(s.missions.assigned).toEqual({});
+    expect(s.missions.list).toHaveLength(n);
+  });
+});

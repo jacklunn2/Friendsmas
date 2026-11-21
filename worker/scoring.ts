@@ -141,7 +141,7 @@ function entriesFor(s: ServerState, activityId: string) {
 // ---------------------------------------------------------------------------
 // Awarding
 
-function award(
+export function award(
   s: ServerState,
   now: number,
   fields: Omit<LedgerEntry, "id" | "at" | "voided" | "voidedAt" | "revealed">,
@@ -298,6 +298,11 @@ export const scoringHost: Record<string, Handler> = {
       requireComplete(s);
       s.stage = { screen: "teams", activityId: null, timer: null };
       return { audit: ["stage.show", "Teams on the TV"] };
+    }
+    if (screen === "missions") {
+      if (!Object.keys(s.missions.assigned).length) throw new UserError("Hand out the secret missions first.");
+      s.stage = { screen: "missions", activityId: null, timer: null };
+      return { audit: ["stage.show", "Secret missions revealed on the TV"] };
     }
     if (screen === "welcome") {
       s.stage = { screen: "welcome", activityId: null, timer: null };

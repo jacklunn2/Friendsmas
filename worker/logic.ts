@@ -25,6 +25,7 @@ import {
 } from "./common";
 import { pick, randomDigits, randomToken, shuffle } from "./random";
 import { guestsHost, guestsPlayer } from "./guests";
+import { autoAssignMission, clearMissionAssignments, missionsHost, missionsPlayer } from "./missions";
 import { quizAlarm, quizHost, quizPlayer } from "./quiz";
 import { scoringHost } from "./scoring";
 import { showHost } from "./show";
@@ -226,6 +227,7 @@ function startFresh(s: ServerState, p: Payload): ActionResult {
   s.naming = { phase: "idle", deadline: null };
   s.intermission = false;
   clearScores(s);
+  clearMissionAssignments(s);
   const detail = clearGuests ? "Started fresh and cleared the guest list" : "Started fresh (guest list kept)";
   return { audit: ["event.startFresh", detail], alarmAt: null, deletePhotos: removed.map((pl) => pl.id) };
 }
@@ -350,6 +352,7 @@ const host: Record<string, Handler> = {
     if (pl.status !== "pending") throw new UserError(`${pl.name} isn't waiting for approval.`);
     pl.status = "joined";
     pl.joinedAt = now;
+    autoAssignMission(s, pl, now);
     return { audit: ["guest.approve", pl.name] };
   },
 
@@ -487,6 +490,7 @@ const host: Record<string, Handler> = {
   ...quizHost,
   ...guestsHost,
   ...showHost,
+  ...missionsHost,
 };
 
 const player: Record<string, Handler> = {
@@ -500,6 +504,7 @@ const player: Record<string, Handler> = {
     pl.token = randomToken();
     pl.status = "joined";
     pl.joinedAt = now;
+    autoAssignMission(s, pl, now);
     return { welcome: { token: pl.token, playerId: pl.id }, audit: ["player.claim", `${pl.name} joined`] };
   },
 
@@ -527,6 +532,7 @@ const player: Record<string, Handler> = {
       pl.status = "joined";
       pl.joinedAt = now;
     }
+    autoAssignMission(s, pl, now);
     return { welcome: { token: pl.token, playerId: pl.id }, audit: ["player.rejoin", `${pl.name} rejoined on a new phone`] };
   },
 
@@ -554,6 +560,7 @@ const player: Record<string, Handler> = {
   },
   ...quizPlayer,
   ...guestsPlayer,
+  ...missionsPlayer,
 };
 
 /** Runs one client request against the state. Mutates `s` in place. */

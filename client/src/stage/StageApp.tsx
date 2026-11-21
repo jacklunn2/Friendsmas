@@ -3,6 +3,7 @@ import { FINAL_REVEAL_MS, SPIN_MS, photoUrl, teamDisplayName, type RevealEventVi
 import { audioOn, enableAudio, sfx } from "../audio";
 import { storage, useRoom, useTicker } from "../net";
 import { Avatar, ConnectionBanner, EventCodeContext, formatClock, playerMap, TeamCard, teamStyle, Wordmark } from "../ui";
+import { MissionsReveal } from "./MissionsReveal";
 import { QuizStage } from "./QuizStage";
 import { ActivityIntro, ActivityResults, Standings } from "./Scoreboard";
 import { Welcome } from "./Welcome";
@@ -173,6 +174,8 @@ function StageScene({ view, anim, serverNow, onLanded, onSpin }: SceneProps) {
   switch (view.stage.screen) {
     case "welcome":
       return <Welcome view={view} trophyUrl={null} />;
+    case "missions":
+      return view.missionsReveal ? <MissionsReveal view={view} /> : <Teams view={view} serverNow={serverNow} />;
     case "activity":
       return <ActivityIntro key={view.stage.activityId} view={view} serverNow={serverNow} />;
     case "quiz":

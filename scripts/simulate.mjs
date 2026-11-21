@@ -98,6 +98,7 @@ async function main() {
   // Start clean if a previous run left anything behind.
   await host.req("event.startFresh", { confirm: "START FRESH", clearGuests: true });
   for (const a of host.view.activities.slice()) await host.req("activity.delete", { id: a.id }).catch(() => {});
+  for (const m of host.view.missions.list.filter((x) => x.text.startsWith("Rehearsal mission"))) await host.req("missions.delete", { id: m.id }).catch(() => {});
   await host.req("draw.options", { revealMode: "live", oddFallback: null });
   await host.until((v) => v.roster.length === 0 && v.draw.oddFallback === null && v.activities.length === 0);
 
@@ -166,6 +167,25 @@ async function main() {
   await host.req("agenda.save", { items: [{ time: "12:00", item: "Arrivals and mulled wine" }, { time: "13:00", item: "The draw" }, { time: "13:30", item: "Lunch" }] });
   await stage.until((v) => v.agenda.length === 3);
   check(stage.view.agenda[1].item === "The draw", "the agenda reaches the welcome screen");
+
+  // --- Block 4: secret missions
+  const handed = await host.req("missions.handOut");
+  check(handed.given === 11 || handed.short > 0, `missions handed out (${handed.given} given, ${handed.short} short)`);
+  if (handed.short) {
+    for (let i = 0; i < handed.short; i++) await host.req("missions.add", { text: `Rehearsal mission ${i + 1}` });
+    await host.req("missions.handOut");
+  }
+  await host.until((v) => v.missions.assignments.length === 11);
+  const missionIds = host.view.missions.assignments.map((x) => x.missionId);
+  check(new Set(missionIds).size === 11, "every guest has a different mission");
+  await phones.Ben.until((v) => v.myMission);
+  const benMission = phones.Ben.view.myMission.text;
+  check(phones.Ben.view.myMission.seen === false, "a new mission pops up unseen");
+  const missionLeak = JSON.stringify([stage.view, phones.Cleo.view, phones.Dev.view]);
+  check(!missionLeak.includes(benMission), "a mission never reaches the TV or another phone");
+  await phones.Ben.req("mission.seen");
+  await phones.Ben.until((v) => v.myMission.seen);
+  check(true, "the guest taps to reveal their mission");
 
   // --- Odd number: 11 joined
   const lockErr = await host.req("draw.lock").catch((e) => e.message);
@@ -333,6 +353,18 @@ async function main() {
   const aceView = await acePhone.until((v) => v.standings !== null);
   check(aceView.me.id !== ace || aceView.myPoints === 4, "a guest sees their own share of the points");
 
+  // Missions: +5 hidden until the next reveal; noticed voids it.
+  const agent = tA.memberIds[0];
+  const before = host.view.liveTotals[tA.id];
+  await host.req("missions.complete", { playerId: agent });
+  await host.until((v) => v.liveTotals[tA.id] === before + 5);
+  check(stage.view.standings.rows.find((r) => r.teamId === tA.id).points === before, "a completed mission stays off the leaderboard until the next reveal");
+  const caught = tC.memberIds[0];
+  await host.req("missions.complete", { playerId: caught });
+  await host.req("missions.notice", { playerId: caught });
+  await host.until((v) => v.missions.assignments.find((x) => x.playerId === caught)?.status === "noticed");
+  check(host.view.ledger.some((e) => e.playerId === caught && e.reason === "Secret mission" && e.voided), "a noticed mission's +5 is voided, not deleted");
+
   // --- Quiz
   const { id: quizId } = await host.req("activity.create", { name: "Test quiz", format: "quiz", kind: "team", perCorrect: 2, questionSeconds: 0 });
   const imported = await host.req("quiz.import", {
@@ -379,6 +411,10 @@ async function main() {
   await host.req("standings.final");
   const fin = await stage.until((v) => v.stage.screen === "final");
   check(fin.standings.final === true && !fin.blackout, "the final results reveal everything");
+
+  await host.req("stage.show", { screen: "missions" });
+  const dossiers = await stage.until((v) => v.stage.screen === "missions" && v.missionsReveal);
+  check(dossiers.missionsReveal.length === 11 && dossiers.missionsReveal[0].status === "completed", "the finale reveals every mission, pulled-off ones first");
 
   for (const c of [host, stage, intruder, badPhone, dupe, lou, avaAgain, ...Object.values(phones)]) {
     try {

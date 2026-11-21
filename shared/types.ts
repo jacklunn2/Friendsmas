@@ -16,7 +16,7 @@ export type Role = "host" | "stage" | "player";
 export type ActivityKind = "team" | "individual";
 export type ScoringScheme = "placement" | "perCorrect" | "judged";
 export type EntryKind = "award" | "bonus" | "penalty";
-export type StageScreen = "teams" | "activity" | "quiz" | "results" | "standings" | "final" | "welcome";
+export type StageScreen = "teams" | "activity" | "quiz" | "results" | "standings" | "final" | "welcome" | "missions";
 export type ActivityFormat = "live" | "quiz";
 export type QuestionType = "choice" | "truefalse" | "number" | "text";
 export type QuizPhase = "intro" | "open" | "closed" | "revealed";
@@ -254,6 +254,8 @@ export interface PlayerView extends PublicView {
   me: PublicPlayer | null;
   /** This guest's own questionnaire answers, or null if they haven't done it. */
   myQuestionnaire: QuestionnaireView | null;
+  /** This guest's secret mission. Never sent to anyone else. */
+  myMission: MyMissionView | null;
   myTeam: MyTeamView | null;
   /** This guest's share of their team's points at the last reveal. */
   myPoints: number;
@@ -311,7 +313,54 @@ export interface FoodWarning {
   playerIds: string[];
 }
 
+// ---------------------------------------------------------------------------
+// Secret missions (Block 4)
+
+export type MissionStatus = "active" | "completed" | "noticed";
+export const MISSION_POINTS = 5;
+export const MISSION_MAX = 200;
+export const MAX_MISSIONS = 60;
+
+export interface MissionDef {
+  id: string;
+  text: string;
+}
+
+/** A guest's own mission, on their phone only. */
+export interface MyMissionView {
+  text: string;
+  /** "completed" only shows once its points have been revealed on the leaderboard. */
+  status: MissionStatus;
+  /** False until the guest first taps to reveal it. */
+  seen: boolean;
+}
+
+export interface MissionAssignmentView {
+  playerId: string;
+  missionId: string;
+  text: string;
+  status: MissionStatus;
+  seen: boolean;
+  /** The +5 in the ledger, while completed. */
+  entryId: string | null;
+}
+
+export interface HostMissionsView {
+  list: MissionDef[];
+  autoOnJoin: boolean;
+  assignments: MissionAssignmentView[];
+}
+
+/** The finale reveal of every mission. */
+export interface MissionRevealRow {
+  playerId: string;
+  text: string;
+  status: MissionStatus;
+}
+
 export interface StageView extends PublicView {
+  /** Every mission and how it went, only while the missions reveal is on the TV. */
+  missionsReveal: MissionRevealRow[] | null;
   role: "stage";
   /** The food everyone is bringing, for the welcome screen. */
   menu: MenuItem[];
@@ -370,6 +419,7 @@ export interface HostView extends PublicView {
   /** Every guest's questionnaire answers, by guest id. Missing = not done yet. */
   questionnaires: Record<string, QuestionnaireView>;
   foodWarnings: FoodWarning[];
+  missions: HostMissionsView;
 }
 
 export type AnyView = PlayerView | StageView | HostView;

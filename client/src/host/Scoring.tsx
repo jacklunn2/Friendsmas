@@ -170,6 +170,8 @@ function tvStatus(view: HostView): string {
       return "Final results";
     case "welcome":
       return "Welcome screen";
+    case "missions":
+      return "The secret missions reveal";
     default:
       return view.naming.phase === "open" ? "Team naming" : "The teams";
   }

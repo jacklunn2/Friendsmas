@@ -16,6 +16,7 @@ import type {
 } from "../shared/types";
 import { revealedIds, spinCooldownUntil } from "./logic";
 import { foodWarnings, menuView, questionnaireView } from "./guests";
+import { hostMissionsView, missionsRevealView, myMissionView } from "./missions";
 import { hostQuizAnswers, myQuizAnswer, questionView, quizView } from "./quiz";
 import { liveEntries, rank, standingsStale, standingsView, totalsFrom } from "./scoring";
 import type { Activity, ServerPlayer, ServerState } from "./state";
@@ -145,7 +146,7 @@ function resultsView(s: ServerState): ResultsView | null {
 }
 
 export function stageView(s: ServerState, now: number, canSpin = false): StageView {
-  return { ...base(s, { role: "stage" }, now), role: "stage", canSpin, menu: menuView(s) };
+  return { ...base(s, { role: "stage" }, now), role: "stage", canSpin, menu: menuView(s), missionsReveal: missionsRevealView(s) };
 }
 
 export function playerView(s: ServerState, playerId: string | null, now: number): PlayerView {
@@ -160,6 +161,7 @@ export function playerView(s: ServerState, playerId: string | null, now: number)
     role: "player",
     me,
     myQuestionnaire: questionnaireView(raw?.answers),
+    myMission: myMissionView(s, raw?.id ?? null),
     myPoints: raw ? (s.snapshots.at(-1)?.players[raw.id] ?? 0) : 0,
     myQuizAnswer: myQuizAnswer(s, raw?.id ?? null),
     myTeam:
@@ -220,5 +222,6 @@ export function hostView(s: ServerState, audit: AuditEntry[], now: number): Host
       s.players.filter((p) => p.answers).map((p) => [p.id, questionnaireView(p.answers)!]),
     ),
     foodWarnings: foodWarnings(s),
+    missions: hostMissionsView(s),
   };
 }

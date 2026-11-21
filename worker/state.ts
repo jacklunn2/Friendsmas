@@ -1,5 +1,7 @@
 import type {
   AgendaItem,
+  MissionDef,
+  MissionStatus,
   ActivityFormat,
   DishCategory,
   ActivityKind,
@@ -184,6 +186,41 @@ export interface ServerState {
   stage: StageState;
   quiz: QuizState;
   agenda: AgendaItem[];
+  missions: MissionsState;
+}
+
+export interface MissionAssignment {
+  missionId: string;
+  status: MissionStatus;
+  seen: boolean;
+  /** The bonus entry while completed (voided, never deleted, if it's undone). */
+  entryId: string | null;
+  assignedAt: number;
+}
+
+export interface MissionsState {
+  list: MissionDef[];
+  autoOnJoin: boolean;
+  /** playerId → their mission */
+  assigned: Record<string, MissionAssignment>;
+}
+
+/** Starter missions for the host to replace with their own. */
+export const STARTER_MISSIONS = [
+  "Get three different people to say \"Merry Christmas\" to you before lunch.",
+  "Work the word \"reindeer\" into five different conversations.",
+  "Get someone to swap seats with you, without asking them to.",
+  "Convince someone you met a celebrity this week.",
+  "Get someone to sing a line of a Christmas song.",
+  "Get someone to take a selfie with you.",
+];
+
+export function freshMissions(s: { nextId: number }): MissionsState {
+  return {
+    list: STARTER_MISSIONS.map((text) => ({ id: `m${s.nextId++}`, text })),
+    autoOnJoin: false,
+    assigned: {},
+  };
 }
 
 export function freshStage(): StageState {
@@ -200,6 +237,7 @@ export function migrate(s: ServerState): ServerState {
   s.stage ??= freshStage();
   s.quiz ??= freshQuiz();
   s.agenda ??= [];
+  s.missions ??= freshMissions(s);
   // Block 4: teams type their own names; suggestions and mottos are gone.
   delete (s as { offeredNames?: unknown }).offeredNames;
   for (const t of s.teams) {
@@ -222,7 +260,7 @@ export function freshDraw(revealMode: RevealMode = "live", oddFallback: OddFallb
 }
 
 export function freshState(now: number): ServerState {
-  return {
+  const s: ServerState = {
     schema: 1,
     version: 0,
     eventCode: randomCode(10),
@@ -242,7 +280,10 @@ export function freshState(now: number): ServerState {
     stage: freshStage(),
     quiz: freshQuiz(),
     agenda: [],
+    missions: { list: [], autoOnJoin: false, assigned: {} },
   };
+  s.missions = freshMissions(s);
+  return s;
 }
 
 export function newId(state: ServerState, prefix: string): string {
