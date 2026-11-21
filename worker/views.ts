@@ -18,8 +18,9 @@ import { revealedIds, spinCooldownUntil } from "./logic";
 import { foodWarnings, menuView, questionnaireView } from "./guests";
 import { hostMissionsView, missionsRevealView, myMissionView } from "./missions";
 import { hostPollVotes, isMyFact, myPollVote, pollQuestionView, pollView } from "./polls";
+import { hostHouseView, houseRevealView } from "./house";
 import { hostQuizAnswers, myQuizAnswer, questionView, quizView } from "./quiz";
-import { liveEntries, rank, standingsStale, standingsView, totalsFrom } from "./scoring";
+import { houseTotal, liveEntries, rank, standingsStale, standingsView, totalsFrom } from "./scoring";
 import type { Activity, ServerPlayer, ServerState } from "./state";
 
 export type Viewer =
@@ -107,6 +108,7 @@ function base(s: ServerState, viewer: Viewer, now: number): PublicView {
     poll: pollView(s),
     agenda: s.agenda.map((a) => ({ ...a })),
     video: s.video ? { ...s.video } : null,
+    houseReveal: houseRevealView(s),
     prize: { trophyImageId: s.prize.trophyImageId, pastWinners: s.prize.pastWinners.map((w) => ({ ...w })) },
   };
 }
@@ -122,6 +124,9 @@ function activityView(a: Activity): ActivityView {
     pollKind: a.pollKind ?? "general",
     foolBonus: a.foolBonus ?? 0,
     videoId: a.videoId ?? null,
+    house: a.house
+      ? { direction: a.house.direction, teamPoints: a.house.teamPoints, housePoints: a.house.housePoints, locked: a.house.houseScore !== null, settled: a.house.settled }
+      : null,
     kind: a.kind,
     scoring: a.scoring,
     placements: a.placements,
@@ -235,5 +240,7 @@ export function hostView(s: ServerState, audit: AuditEntry[], now: number): Host
     polls: Object.fromEntries(s.activities.filter((a) => a.format === "poll").map((a) => [a.id, (a.polls ?? []).map(pollQuestionView)])),
     pollVotes: hostPollVotes(s),
     videos: s.videos.map((v) => ({ ...v })),
+    house: hostHouseView(s),
+    liveHouseTotal: houseTotal(liveEntries(s)),
   };
 }

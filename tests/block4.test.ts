@@ -484,3 +484,91 @@ describe("videos", () => {
     expect(() => runAction(s, HOST, "activity.video", { activityId: id, videoId: vid }, T0)).toThrow(/no longer exists/);
   });
 });
+
+describe("the House", () => {
+  function houseRound(s: ServerState, opts: Record<string, unknown> = {}) {
+    const { id } = runAction(s, HOST, "activity.create", { name: "Paper planes", kind: "team", scoring: "judged" }, T0).data as { id: string };
+    runAction(s, HOST, "house.settings", { activityId: id, enabled: true, direction: "high", teamPoints: 4, housePoints: 6, ...opts }, T0);
+    return id;
+  }
+
+  it("locks in a secret score that never reaches the TV or phones before the face-off", () => {
+    const s = setup(6);
+    drawTeams(s);
+    const id = houseRound(s);
+    runAction(s, HOST, "house.score", { activityId: id, score: 987654 }, T0);
+    expect(() => runAction(s, HOST, "house.score", { activityId: id, score: 1 }, T0)).toThrow(/locked/);
+    expect(() => runAction(s, HOST, "house.settings", { activityId: id, enabled: true, direction: "low" }, T0)).toThrow(/locked/);
+    expect(publicJson(s)).not.toContain("987654");
+    expect(stageView(s, T0).activities.find((a) => a.id === id)).toBeUndefined();
+    expect(hostView(s, [], T0).house[id].houseScore).toBe(987654);
+    expect(hostView(s, [], T0).activities.find((a) => a.id === id)!.house).toMatchObject({ locked: true, settled: false });
+  });
+
+  it("pays every team that beats the House, and the House wins ties", () => {
+    const s = setup(6);
+    drawTeams(s);
+    const id = houseRound(s);
+    const [t1, t2, t3] = s.teams;
+    runAction(s, HOST, "house.score", { activityId: id, score: 10 }, T0);
+    runAction(s, HOST, "house.teamScore", { activityId: id, teamId: t1.id, score: 12 }, T0);
+    runAction(s, HOST, "house.teamScore", { activityId: id, teamId: t2.id, score: 10 }, T0);
+    runAction(s, HOST, "house.teamScore", { activityId: id, teamId: t3.id, score: 3 }, T0);
+    runAction(s, HOST, "house.reveal", { activityId: id }, T0);
+    const r = stageView(s, T0).houseReveal!;
+    expect(r).toMatchObject({ houseScore: 10, houseWins: false });
+    expect(r.rows.map((x) => [x.teamId, x.beat])).toEqual([[t1.id, true], [t2.id, false], [t3.id, false]]);
+    const live = hostView(s, [], T0).liveTotals;
+    expect([live[t1.id], live[t2.id], live[t3.id]]).toEqual([4, 0, 0]);
+    expect(hostView(s, [], T0).liveHouseTotal).toBe(0);
+  });
+
+  it("takes the points when nobody beats it, and sits on the leaderboard without ever winning", () => {
+    const s = setup(4);
+    drawTeams(s);
+    const id = houseRound(s, { direction: "low" });
+    const [t1, t2] = s.teams;
+    runAction(s, HOST, "house.score", { activityId: id, score: 30 }, T0);
+    runAction(s, HOST, "house.teamScore", { activityId: id, teamId: t1.id, score: 31 }, T0);
+    runAction(s, HOST, "house.teamScore", { activityId: id, teamId: t2.id, score: 30 }, T0);
+    runAction(s, HOST, "house.reveal", { activityId: id }, T0);
+    expect(stageView(s, T0).houseReveal!.houseWins).toBe(true);
+    expect(hostView(s, [], T0).liveHouseTotal).toBe(6);
+    // Hidden until the next reveal, then on the board, never a winner.
+    expect(stageView(s, T0).standings).toBeNull();
+    runAction(s, HOST, "score.adjust", { teamId: t1.id, points: 2, reason: "Style" }, T0);
+    runAction(s, HOST, "standings.final", {}, T0 + 1);
+    const st = stageView(s, T0).standings!;
+    expect(st.house).toEqual({ points: 6, prevPoints: null });
+    expect(st.rows[0]).toMatchObject({ teamId: t1.id, rank: 1, points: 2 });
+    expect(st.rows.some((r) => r.teamId === "house")).toBe(false);
+  });
+
+  it("settles quiz rounds on the points each team earned, and re-settling voids the old points", () => {
+    const s = setup(4);
+    drawTeams(s);
+    const { id } = runAction(s, HOST, "activity.create", { name: "Quiz", format: "quiz", kind: "team", perCorrect: 1 }, T0).data as { id: string };
+    runAction(s, HOST, "house.settings", { activityId: id, enabled: true, direction: "high", teamPoints: 3, housePoints: 3 }, T0);
+    runAction(s, HOST, "quiz.question.save", { activityId: id, question: { type: "truefalse", prompt: "Snow is cold", correctIndex: 0 } }, T0);
+    runAction(s, HOST, "house.score", { activityId: id, score: 0 }, T0);
+    expect(() => runAction(s, HOST, "house.teamScore", { activityId: id, teamId: s.teams[0].id, score: 1 }, T0)).toThrow(/points earned/);
+    runAction(s, HOST, "quiz.start", { activityId: id }, T0);
+    runAction(s, HOST, "quiz.open", {}, T0);
+    const t1 = s.teams[0];
+    runAction(s, { role: "player", playerId: t1.memberIds[0] }, "quiz.answer", { questionId: s.activities[0].questions![0].id, value: 0 }, T0 + 1);
+    runAction(s, HOST, "quiz.reveal", {}, T0 + 2);
+    runAction(s, HOST, "house.reveal", { activityId: id }, T0 + 3);
+    expect(stageView(s, T0).houseReveal!.rows.find((r) => r.teamId === t1.id)).toMatchObject({ score: 1, beat: true });
+    runAction(s, HOST, "house.reveal", { activityId: id }, T0 + 4);
+    expect(s.ledger.filter((e) => e.reason === "Beat the House" && !e.voided)).toHaveLength(1);
+    expect(s.ledger.filter((e) => e.reason === "Beat the House" && e.voided)).toHaveLength(1);
+  });
+
+  it("forgets rehearsal House scores when starting fresh, but keeps the settings", () => {
+    const s = setup(2);
+    const id = houseRound(s);
+    runAction(s, HOST, "house.score", { activityId: id, score: 5 }, T0);
+    runAction(s, HOST, "event.startFresh", { confirm: "START FRESH" }, T0);
+    expect(s.activities[0].house).toMatchObject({ houseScore: null, teamPoints: 4, settled: false });
+  });
+});

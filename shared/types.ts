@@ -16,7 +16,7 @@ export type Role = "host" | "stage" | "player";
 export type ActivityKind = "team" | "individual";
 export type ScoringScheme = "placement" | "perCorrect" | "judged";
 export type EntryKind = "award" | "bonus" | "penalty";
-export type StageScreen = "teams" | "activity" | "quiz" | "results" | "standings" | "final" | "welcome" | "missions" | "poll" | "prize" | "gallery";
+export type StageScreen = "teams" | "activity" | "quiz" | "results" | "standings" | "final" | "welcome" | "missions" | "poll" | "prize" | "gallery" | "house";
 export type ActivityFormat = "live" | "quiz" | "poll";
 export type QuestionType = "choice" | "truefalse" | "number" | "text";
 export type QuizPhase = "intro" | "open" | "closed" | "revealed";
@@ -100,6 +100,8 @@ export interface ActivityView {
   foolBonus: number;
   /** A clip that plays on the TV, with sound, when the activity starts. */
   videoId: string | null;
+  /** "Beat the House" settings. The House's score itself is never sent to the TV or phones before the reveal. */
+  house: HouseSettingsView | null;
 }
 
 /** A quiz question as the host edits it. Never sent to guests or the TV. */
@@ -210,6 +212,8 @@ export interface StandingsView {
   final: boolean;
   /** Best first. */
   rows: StandingsRow[];
+  /** The House's points, shown on the leaderboard but never a winner. Null until The House plays. */
+  house: { points: number; prevPoints: number | null } | null;
 }
 
 export interface ResultsView {
@@ -244,6 +248,8 @@ export interface PublicView {
   prize: PrizeView;
   /** A clip playing on the TV, over whatever screen is showing. */
   video: VideoPlayback | null;
+  /** The House-vs-teams face-off, while it's on the TV. */
+  houseReveal: HouseRevealView | null;
 }
 
 export interface AgendaItem {
@@ -379,7 +385,43 @@ export interface FoodWarning {
 }
 
 // ---------------------------------------------------------------------------
-// Polls on phones (Block 6)
+// The House (Block 4)
+
+/** The House's id in the ledger and on the leaderboard. It is never a team and can never win. */
+export const HOUSE_ID = "house";
+export type HouseDirection = "high" | "low";
+
+export interface HouseSettingsView {
+  direction: HouseDirection;
+  /** Points each team gets for beating the House. */
+  teamPoints: number;
+  /** Points the House takes if no team beats it. */
+  housePoints: number;
+  /** True once the House's score is set (it can't be changed after that). */
+  locked: boolean;
+  /** True once the face-off has been settled. */
+  settled: boolean;
+}
+
+/** The host's private view: the House's score and the teams' scores so far. */
+export interface HostHouseView {
+  houseScore: number | null;
+  teamScores: Record<string, number>;
+}
+
+/** The face-off on the TV. */
+export interface HouseRevealView {
+  activityId: string;
+  direction: HouseDirection;
+  houseScore: number;
+  rows: { teamId: string; score: number | null; beat: boolean }[];
+  teamPoints: number;
+  housePoints: number;
+  houseWins: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Polls on phones (Block 4)
 
 export type PollKind = "general" | "whowrote";
 /** What guests vote between: each other (with photos), the teams, or the host's own options. */
@@ -572,6 +614,10 @@ export interface HostView extends PublicView {
   /** Votes on the open poll question, for the presenter view. */
   pollVotes: HostPollVote[];
   videos: VideoInfo[];
+  /** Beat-the-House activities: the House's secret score and the teams' scores. */
+  house: Record<string, HostHouseView>;
+  /** The House's total, including points not yet revealed. */
+  liveHouseTotal: number;
 }
 
 export type AnyView = PlayerView | StageView | HostView;

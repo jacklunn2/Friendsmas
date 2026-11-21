@@ -1,5 +1,6 @@
 import type {
   AgendaItem,
+  HouseDirection,
   VideoInfo,
   VideoPlayback,
   PrizeView,
@@ -140,6 +141,18 @@ export interface Activity {
   foolBonus?: number;
   polls?: PollQuestion[];
   videoId?: string | null;
+  house?: HouseConfig | null;
+}
+
+export interface HouseConfig {
+  direction: HouseDirection;
+  teamPoints: number;
+  housePoints: number;
+  /** Set once, before the round, then locked. Never leaves the server until the reveal. */
+  houseScore: number | null;
+  /** Live activities: the score the host records for each team. */
+  teamScores: Record<string, number>;
+  settled: boolean;
 }
 
 export interface PollQuestion {
@@ -178,6 +191,8 @@ export interface Snapshot {
   teams: Record<string, number>;
   /** Each guest's contribution at the moment of the reveal. */
   players: Record<string, number>;
+  /** The House's total at the moment of the reveal. */
+  house?: number;
 }
 
 export interface StageState {

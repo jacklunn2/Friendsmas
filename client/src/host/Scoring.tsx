@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
   ACTIVITY_NAME_MAX,
+  HOUSE_ID,
   MAX_POINTS,
   REASON_MAX,
   UNDO_MS,
@@ -20,6 +21,7 @@ import {
 import { useTicker } from "../net";
 import { Avatar, formatClock, teamStyle } from "../ui";
 import { PollPad, pollSummary } from "./Polls";
+import { HousePad } from "./House";
 import { ActivityVideoPicker } from "./Show";
 import { QuizPad, quizSummary } from "./Quiz";
 
@@ -177,6 +179,8 @@ function tvStatus(view: HostView): string {
       return "Welcome screen";
     case "missions":
       return "The secret missions reveal";
+    case "house":
+      return `${a?.name ?? "Activity"}: Beat the House`;
     case "prize":
       return "The Grand Prize";
     case "gallery":
@@ -261,6 +265,15 @@ function TotalsTable({ view }: { view: HostView }) {
             </tr>
           );
         })}
+        {(view.standings?.house || view.liveHouseTotal !== 0 || view.activities.some((a) => a.house)) && (
+          <tr className="totals__house">
+            <th scope="row" className="totals__team">
+              🏠 The House <span className="host__muted">(can't win)</span>
+            </th>
+            <td className="num">{view.standings?.house?.points ?? "–"}</td>
+            <td className={`num${(view.standings?.house?.points ?? 0) !== view.liveHouseTotal ? " totals__changed" : ""}`}>{view.liveHouseTotal}</td>
+          </tr>
+        )}
       </tbody>
     </table>
   );
@@ -312,6 +325,8 @@ function ActivityPad(props: PadProps) {
           </div>
         </header>
         <ActivityVideoPicker activity={a} view={view} run={run} />
+      <HousePad activity={a} view={view} run={run} />
+        <HousePad activity={a} view={view} run={run} />
         {a.format === "poll" ? (
           <PollPad activity={a} view={view} run={run} players={players} serverNow={serverNow} />
         ) : (
@@ -901,7 +916,7 @@ function History({
               <time className="log__time">{new Date(e.at).toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" })}</time>
               <span className={`history__pts${e.points < 0 ? " is-neg" : ""}`}>{signed(e.points)}</span>
               <span className="history__what">
-                <span className="history__team">{team ? teamDisplayName(team) : "Removed team"}</span>
+                <span className="history__team">{e.teamId === HOUSE_ID ? "🏠 The House" : team ? teamDisplayName(team) : "Removed team"}</span>
                 {who && ` (${who})`} · {e.reason}
               </span>
               <span className="history__tags">

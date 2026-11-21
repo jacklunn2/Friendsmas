@@ -3,6 +3,7 @@ import { FINAL_REVEAL_MS, SPIN_MS, imageUrl, photoUrl, teamDisplayName, type Rev
 import { audioOn, enableAudio, sfx } from "../audio";
 import { storage, useRoom, useTicker } from "../net";
 import { Avatar, ConnectionBanner, EventCodeContext, formatClock, playerMap, TeamCard, teamStyle, Wordmark } from "../ui";
+import { HouseFaceOff } from "./HouseFaceOff";
 import { MissionsReveal } from "./MissionsReveal";
 import { PollStage } from "./PollStage";
 import { GrandPrize, HallOfFame } from "./Prize";
@@ -181,6 +182,8 @@ function StageScene({ view, anim, serverNow, onLanded, onSpin }: SceneProps) {
       return <Welcome view={view} trophyUrl={trophyUrl} />;
     case "poll":
       return view.poll ? <PollStage key={`${view.poll.activityId}-${view.poll.question?.id ?? "intro"}`} view={view} serverNow={serverNow} /> : <Teams view={view} serverNow={serverNow} />;
+    case "house":
+      return view.houseReveal ? <HouseFaceOff key={view.houseReveal.activityId} view={view} /> : <Teams view={view} serverNow={serverNow} />;
     case "prize":
       return <GrandPrize view={view} />;
     case "gallery":

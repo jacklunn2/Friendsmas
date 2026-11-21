@@ -144,6 +144,12 @@ export function Standings({ view }: { view: StageView }) {
   }, [animate, st?.seq]);
 
   if (!st) return null;
+  // Where the House goes: above the first team with fewer points (ties go below the teams).
+  const houseAt = st.house ? (() => {
+    const i = rows.findIndex((r) => r.points < st.house!.points);
+    return i === -1 ? rows.length : i;
+  })() : -1;
+  const houseDelay = !animate ? 0 : houseAt >= rows.length ? 0 : houseAt === 0 ? Math.max(0, delays[0] - 700) : delays[houseAt] + 450;
 
   return (
     <section className={`scene board${final ? " board--final" : ""}`}>
@@ -155,10 +161,11 @@ export function Standings({ view }: { view: StageView }) {
         {rows.map((r, i) => {
           const team = teams.get(r.teamId);
           if (!team) return null;
-          return (
-            <StandingsLine key={r.teamId} row={r} team={team} players={players} delay={delays[i]} animate={animate} leader={i === 0} />
-          );
+          const line = <StandingsLine key={r.teamId} row={r} team={team} players={players} delay={delays[i]} animate={animate} leader={i === 0} />;
+          // The House sits where its points put it, but never takes a place.
+          return houseAt === i ? [<HouseLine key="house" house={st.house!} delay={houseDelay} animate={animate} />, line] : line;
         })}
+        {st.house && houseAt === rows.length && <HouseLine key="house" house={st.house} delay={houseDelay} animate={animate} />}
       </ol>
       {final && showWinner && <Winners rows={winners} teams={teams} players={players} />}
     </section>
@@ -196,6 +203,22 @@ function StandingsLine({
           </span>
         )}
       </span>
+      <span className="board-row__points">{points}</span>
+    </li>
+  );
+}
+
+function HouseLine({ house, delay, animate }: { house: { points: number; prevPoints: number | null }; delay: number; animate: boolean }) {
+  const points = useCountUp(animate ? (house.prevPoints ?? 0) : house.points, house.points, delay + 250, 900);
+  const gained = house.prevPoints === null ? null : house.points - house.prevPoints;
+  return (
+    <li className={`board-row board-row--house${animate ? " is-animated" : ""}`} style={{ animationDelay: `${delay}ms` } as CSSProperties}>
+      <span className="board-row__place" aria-label="The House can't win">🏠</span>
+      <span className="board-row__team">
+        <span className="board-row__name">The House</span>
+        <span className="board-row__house-note">can't win</span>
+      </span>
+      <span className="board-row__move">{gained !== null && gained !== 0 && <span className="board-row__gained">{signed(gained)}</span>}</span>
       <span className="board-row__points">{points}</span>
     </li>
   );

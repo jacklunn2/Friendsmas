@@ -61,7 +61,7 @@ class Client {
   until(pred, ms = 5000) {
     if (this.view && pred(this.view)) return Promise.resolve(this.view);
     return new Promise((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error("timed out waiting for state")), ms);
+      const t = setTimeout(() => reject(new Error(`timed out waiting for state: ${pred.toString().slice(0, 160)}`)), ms);
       this.waiters.push((v) => {
         if (!pred(v)) return false;
         clearTimeout(t);
@@ -349,7 +349,7 @@ async function main() {
   await host.req("standings.reveal");
   const board = await stage.until((v) => v.stage.screen === "standings" && v.standings);
   check(board.standings.rows[0].teamId === tB.id && board.standings.rows[0].points === 7, "the leaderboard puts the leader first");
-  const acePhone = Object.values(phones).find((c) => c.view.me?.id === ace) ?? avaAgain;
+  const acePhone = Object.values(phones).find((c) => c.view.me?.id === ace && c.ws.readyState === 1) ?? avaAgain;
   const aceView = await acePhone.until((v) => v.standings !== null);
   check(aceView.me.id !== ace || aceView.myPoints === 4, "a guest sees their own share of the points");
 
@@ -364,6 +364,26 @@ async function main() {
   await host.req("missions.notice", { playerId: caught });
   await host.until((v) => v.missions.assignments.find((x) => x.playerId === caught)?.status === "noticed");
   check(host.view.ledger.some((e) => e.playerId === caught && e.reason === "Secret mission" && e.voided), "a noticed mission's +5 is voided, not deleted");
+
+  // --- Block 4: the House
+  const { id: planes } = await host.req("activity.create", { name: "Paper planes", kind: "team", scoring: "judged" });
+  await host.req("house.settings", { activityId: planes, enabled: true, direction: "high", teamPoints: 4, housePoints: 6 });
+  await host.req("house.score", { activityId: planes, score: 123456 });
+  const relock = await host.req("house.score", { activityId: planes, score: 1 }).catch((e) => e.message);
+  check(/locked/.test(relock), "the House's score can't change once locked in");
+  await host.req("stage.show", { screen: "activity", activityId: planes });
+  await stage.until((v) => v.stage.activityId === planes);
+  const housePeek = JSON.stringify([stage.view, ...Object.values(phones).map((c) => c.view)]);
+  check(!housePeek.includes("123456"), "the House's score stays off the TV and phones");
+  const [hA, hB, hC] = host.view.teams;
+  await host.req("house.teamScore", { activityId: planes, teamId: hA.id, score: 200000 });
+  await host.req("house.teamScore", { activityId: planes, teamId: hB.id, score: 123456 });
+  await host.req("house.teamScore", { activityId: planes, teamId: hC.id, score: 5 });
+  await host.req("house.reveal", { activityId: planes });
+  const face = await stage.until((v) => v.stage.screen === "house" && v.houseReveal);
+  check(face.houseReveal.houseScore === 123456 && face.houseReveal.rows.filter((r) => r.beat).map((r) => r.teamId).join() === hA.id, "the face-off: one team beats the House, and a tie goes to the House");
+  await host.until((v) => v.ledger.some((e) => e.activityId === planes && e.teamId === hA.id && e.points === 4));
+  check(true, "beating the House earns the points");
 
   // --- Quiz
   const { id: quizId } = await host.req("activity.create", { name: "Test quiz", format: "quiz", kind: "team", perCorrect: 2, questionSeconds: 0 });
@@ -451,6 +471,7 @@ async function main() {
   await host.req("standings.final");
   const fin = await stage.until((v) => v.stage.screen === "final");
   check(fin.standings.final === true && !fin.blackout, "the final results reveal everything");
+  check(fin.standings.house !== null && !fin.standings.rows.some((r) => r.teamId === "house"), "the House is on the final leaderboard but can't win");
 
   await host.req("stage.show", { screen: "missions" });
   const dossiers = await stage.until((v) => v.stage.screen === "missions" && v.missionsReveal);

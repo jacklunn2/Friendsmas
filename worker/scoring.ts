@@ -10,6 +10,7 @@ import {
   MAX_POINTS,
   REASON_MAX,
   ordinal,
+  HOUSE_ID,
   type ActivityFormat,
   type ActivityKind,
   type PollKind,
@@ -55,6 +56,16 @@ export function totalsFrom(s: ServerState, entries: LedgerEntry[]) {
 }
 
 /** Best first. Tied teams share a rank (1, 2, 2, 4) and keep team order. */
+/** The House's points: entries under HOUSE_ID. It's never a team, so never ranked. */
+export function houseTotal(entries: LedgerEntry[]): number {
+  return entries.filter((e) => e.teamId === HOUSE_ID).reduce((n, e) => n + e.points, 0);
+}
+
+/** True once any activity plays against the House. */
+function housePlays(s: ServerState): boolean {
+  return s.activities.some((a) => a.house) || s.ledger.some((e) => e.teamId === HOUSE_ID);
+}
+
 export function rank(
   totals: Record<string, number>,
   order: { id: string; order: number }[],
@@ -79,7 +90,11 @@ export function standingsView(s: ServerState): StandingsView | null {
     const prev = prevRanks.find((p) => p.teamId === r.teamId);
     return { ...r, prevPoints: prev ? prev.points : null, prevRank: prev ? prev.rank : null };
   });
-  return { seq: current.seq, at: current.at, final: current.final, rows };
+  const house =
+    housePlays(s) && current.house !== undefined
+      ? { points: current.house, prevPoints: previous?.house ?? null }
+      : null;
+  return { seq: current.seq, at: current.at, final: current.final, rows, house };
 }
 
 /** True when what's on the leaderboard no longer matches the live totals. */
@@ -87,13 +102,14 @@ export function standingsStale(s: ServerState): boolean {
   const live = totalsFrom(s, liveEntries(s)).teams;
   const shown = s.snapshots.at(-1)?.teams;
   if (!shown) return liveEntries(s).length > 0;
+  if (houseTotal(liveEntries(s)) !== (s.snapshots.at(-1)?.house ?? 0)) return true;
   return s.teams.some((t) => (live[t.id] ?? 0) !== (shown[t.id] ?? 0));
 }
 
 function takeSnapshot(s: ServerState, now: number, final: boolean): Snapshot {
   for (const e of s.ledger) if (!e.voided) e.revealed = true;
   const { teams, players } = totalsFrom(s, liveEntries(s));
-  const snap: Snapshot = { seq: ++s.snapshotSeq, at: now, final, teams, players };
+  const snap: Snapshot = { seq: ++s.snapshotSeq, at: now, final, teams, players, house: houseTotal(liveEntries(s)) };
   s.snapshots = [...s.snapshots, snap].slice(-2);
   return snap;
 }
@@ -160,7 +176,7 @@ function describeEntry(s: ServerState, e: LedgerEntry): string {
   const team = s.teams.find((t) => t.id === e.teamId);
   const who = e.playerId ? s.players.find((p) => p.id === e.playerId)?.name : null;
   const pts = `${e.points > 0 ? "+" : ""}${e.points}`;
-  return `${pts} to ${team ? teamLabel(team) : "a team"}${who ? ` (${who})` : ""}: ${e.reason}`;
+  return `${pts} to ${e.teamId === HOUSE_ID ? "The House" : team ? teamLabel(team) : "a team"}${who ? ` (${who})` : ""}: ${e.reason}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -272,7 +288,7 @@ export const scoringHost: Record<string, Handler> = {
     const e = s.ledger.find((x) => x.id === p.entryId);
     if (!e) throw new UserError("That score no longer exists.");
     if (!e.voided) return { noChange: true };
-    if (!s.teams.some((t) => t.id === e.teamId)) throw new UserError("That team no longer exists.");
+    if (e.teamId !== HOUSE_ID && !s.teams.some((t) => t.id === e.teamId)) throw new UserError("That team no longer exists.");
     if (e.placement !== null) {
       // Restoring a place replaces whatever place the team or guest holds now.
       const perTeam = s.activities.find((a) => a.id === e.activityId)?.kind !== "individual";

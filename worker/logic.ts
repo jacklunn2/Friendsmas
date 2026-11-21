@@ -25,6 +25,7 @@ import {
 } from "./common";
 import { pick, randomDigits, randomToken, shuffle } from "./random";
 import { guestsHost, guestsPlayer } from "./guests";
+import { houseHost } from "./house";
 import { pollsHost, pollsPlayer } from "./polls";
 import { autoAssignMission, clearMissionAssignments, missionsHost, missionsPlayer } from "./missions";
 import { quizAlarm, quizHost, quizPlayer } from "./quiz";
@@ -207,7 +208,12 @@ function clearScores(s: ServerState): void {
   s.blackout = false;
   s.stage = freshStage();
   s.quiz = freshQuiz();
-  for (const a of s.activities) a.resultsShown = false;
+  s.video = null;
+  for (const a of s.activities) {
+    a.resultsShown = false;
+    // Rehearsal House scores go too; the settings stay.
+    if (a.house) a.house = { ...a.house, houseScore: null, teamScores: {}, settled: false };
+  }
 }
 
 /**
@@ -495,6 +501,7 @@ const host: Record<string, Handler> = {
   ...showHost,
   ...missionsHost,
   ...pollsHost,
+  ...houseHost,
 };
 
 const player: Record<string, Handler> = {
