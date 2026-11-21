@@ -258,7 +258,7 @@ function TotalsTable({ view }: { view: HostView }) {
           return (
             <tr key={t.id} style={teamStyle(t)}>
               <th scope="row" className="totals__team">
-                {t.badge} {teamDisplayName(t)}
+                {teamDisplayName(t)}
               </th>
               <td className="num">{tv ?? "–"}</td>
               <td className={`num${tv !== undefined && tv !== live ? " totals__changed" : ""}`}>{live}</td>
@@ -457,7 +457,7 @@ function TeamPad({ team, activity: a, entries, players, run, scored }: TeamPadPr
     <article className="team-pad" style={teamStyle(team)}>
       <header className="team-pad__head">
         <span className="team-pad__name">
-          {team.badge} {name}
+          {name}
         </span>
         <span className="team-pad__total">{signed(total)}</span>
       </header>
@@ -646,7 +646,7 @@ function AdjustForm({ view, players, scored }: { view: HostView; players: Map<st
               setPlayerId("");
             }}
           >
-            {t.badge} {teamDisplayName(t)}
+            {teamDisplayName(t)}
           </button>
         ))}
       </div>

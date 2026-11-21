@@ -217,7 +217,7 @@ function LiveVotes({ view, players, total, correctKey }: { view: HostView; playe
   const label = (key: string) => {
     const o = options.find((x) => x.key === key);
     const t = teams.get(key);
-    return t ? `${t.badge} ${teamDisplayName(t)}` : (o?.label ?? key);
+    return t ? teamDisplayName(t) : (o?.label ?? key);
   };
   const keys = options.map((o) => o.key).filter((k) => byKey.has(k)).sort((x, y) => (byKey.get(y)!.length - byKey.get(x)!.length));
   return (

@@ -50,7 +50,7 @@ export function MissionLayer({ mission, send, open, setOpen }: { mission: MyMiss
           <span className="mission__kicker">Your mission, should you choose to accept it</span>
           <span className="mission__text">{mission.text}</span>
           {mission.status === "completed" && <span className="mission__result is-done">Mission accomplished! +{MISSION_POINTS} for your team</span>}
-          {mission.status === "noticed" && <span className="mission__result is-failed">Rumbled! Someone noticed.</span>}
+          {mission.status === "noticed" && <span className="mission__result is-failed">Mission failed: someone noticed.</span>}
           {mission.status === "active" && <span className="mission__hint">Pull it off without anyone noticing. The host decides if you did.</span>}
           <span className="mission__tap">Tap to hide</span>
         </button>
@@ -61,7 +61,7 @@ export function MissionLayer({ mission, send, open, setOpen }: { mission: MyMiss
 
 /**
  * When the host marks a guest's mission as Noticed, their phone sounds the
- * alarm: a full-screen "Rumbled!" and a buzz, once. If the phone was closed at
+ * alarm: a full-screen "Mission failed" and a buzz, once. If the phone was closed at
  * the time, it shows the next time they open the link.
  */
 export function RumbledAlert({ mission, code, playerId }: { mission: MyMissionView; code: string; playerId: string }) {
@@ -74,7 +74,7 @@ export function RumbledAlert({ mission, code, playerId }: { mission: MyMissionVi
   }, [show]);
   if (!show) return null;
   return (
-    <div className="rumbled" role="alertdialog" aria-modal="true" aria-label="Your mission was noticed">
+    <div className="rumbled" role="alertdialog" aria-modal="true" aria-label="You failed your secret mission">
       <button
         className="rumbled__body"
         onClick={() => {
@@ -85,8 +85,8 @@ export function RumbledAlert({ mission, code, playerId }: { mission: MyMissionVi
         <span className="rumbled__siren" aria-hidden>
           🚨
         </span>
-        <span className="rumbled__title">Rumbled!</span>
-        <span className="rumbled__text">Someone spotted your secret mission. It's failed, so no points this time.</span>
+        <span className="rumbled__title">Mission failed</span>
+        <span className="rumbled__text">Someone noticed your secret mission, so it doesn't count. No points this time.</span>
         <span className="rumbled__mission">"{mission.text}"</span>
         <span className="rumbled__tap">Tap to close</span>
       </button>

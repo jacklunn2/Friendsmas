@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
-  EXTRA_BADGES,
   TEAM_NAME_MAX,
-  TEAM_BADGES,
   TEAM_COLOURS,
   teamDisplayName,
   type HostPlayer,
@@ -491,7 +489,7 @@ function RosterRow({ player: p, team, run }: { player: HostPlayer; team?: Public
       <span className="row__status">
         {team ? (
           <span className="team-tag" style={teamStyle(team)}>
-            {team.badge} {teamDisplayName(team)}
+            {teamDisplayName(team)}
           </span>
         ) : (
           STATUS_TEXT[p.status]
@@ -674,7 +672,7 @@ function AddToTeam({ player, teams, run }: { player: HostPlayer; teams: PublicTe
         <option value="random">Spin for a team (smallest teams)</option>
         {teams.map((t) => (
           <option key={t.id} value={t.id}>
-            {t.badge} {teamDisplayName(t)} ({t.memberCount})
+            {teamDisplayName(t)} ({t.memberCount})
           </option>
         ))}
       </select>
@@ -704,7 +702,6 @@ function TeamEditor({
   return (
     <article className="team-editor" style={teamStyle(team)}>
       <header className="team-editor__head">
-        <span className="team-editor__badge">{team.badge}</span>
         <h3 className="team-editor__name">{teamDisplayName(team)}</h3>
         <span className="host__muted">{team.memberCount} players</span>
       </header>
@@ -731,7 +728,7 @@ function TeamEditor({
                     .filter((t) => t.id !== team.id)
                     .map((t) => (
                       <option key={t.id} value={t.id}>
-                        {t.badge} {teamDisplayName(t)}
+                        {teamDisplayName(t)}
                       </option>
                     ))}
                 </select>
@@ -791,18 +788,6 @@ function TeamEditor({
             />
           ))}
         </div>
-        <select
-          className="input input--small"
-          value={team.badge}
-          onChange={(e) => run("team.update", { teamId: team.id, badge: e.target.value })}
-          aria-label="Team badge"
-        >
-          {[...TEAM_BADGES, ...EXTRA_BADGES].map((b) => (
-            <option key={b} value={b}>
-              {b}
-            </option>
-          ))}
-        </select>
       </div>
     </article>
   );

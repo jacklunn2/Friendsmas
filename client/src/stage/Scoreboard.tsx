@@ -227,9 +227,6 @@ function HouseLine({ house, delay, animate }: { house: { points: number; prevPoi
 function TeamName({ team, players }: { team: PublicTeam; players: Map<string, PublicPlayer> }) {
   return (
     <span className="board-row__team">
-      <span className="board-row__badge" aria-hidden>
-        {team.badge}
-      </span>
       <span className="board-row__name">{teamDisplayName(team)}</span>
       <span className="board-row__members">
         {team.memberIds.map((id) => {
@@ -258,7 +255,7 @@ function Winners({ rows, teams, players }: { rows: StandingsRow[]; teams: Map<st
               })}
             </div>
             <h2 className="winner__name">
-              {t.badge} {teamDisplayName(t)}
+              {teamDisplayName(t)}
             </h2>
             <p className="winner__members">{t.memberIds.map((id) => players.get(id)?.name).filter(Boolean).join(" & ")}</p>
           </div>

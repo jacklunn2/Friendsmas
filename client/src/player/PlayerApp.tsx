@@ -468,7 +468,7 @@ function InGame({ view, send, serverNow, getToken, code }: InGameProps) {
       {phase === "complete" && view.stage.screen === "quiz" && <PhoneQuiz view={view} send={send} serverNow={serverNow} />}
       {phase === "complete" && view.stage.screen === "poll" && <PhonePoll view={view} send={send} serverNow={serverNow} />}
       <p className="phone__kicker">
-        {team.badge} You're on {teamDisplayName(team)}
+        You're on {teamDisplayName(team)}
       </p>
       <h1 className="phone__title phone__title--team">
         {partners.length ? `With ${partners.map((p) => p.name).join(" and ")}` : "Your partner is still on the wheel…"}
@@ -577,7 +577,7 @@ function MyStandings({ view, serverNow }: { view: PlayerView; serverNow: () => n
             <li key={r.teamId} className={`standings-card__row${r.teamId === team.id ? " is-mine" : ""}`} style={teamStyle(t)}>
               <span className="standings-card__place">{placeLabel(r)}</span>
               <span className="standings-card__team">
-                {t.badge} {teamDisplayName(t)}
+                {teamDisplayName(t)}
               </span>
               <span className="standings-card__pts">{r.points}</span>
             </li>

@@ -252,12 +252,12 @@ function Draw({ view, anim, onLanded, onSpin }: { view: StageView; anim: Anim | 
             <Avatar player={winner} className="draw__callout-photo" />
             <span className="draw__callout-name">{winner.name}</span>
             <span className="draw__callout-team">
-              joins {winnerTeam.badge} {teamDisplayName(winnerTeam)}
+              joins {teamDisplayName(winnerTeam)}
             </span>
           </div>
         )}
         {anim?.kind === "final" && winnerTeam && (
-          <FinalReveal event={anim.event} teamName={teamDisplayName(winnerTeam)} badge={winnerTeam.badge} players={players} colour={winnerTeam.colour} />
+          <FinalReveal event={anim.event} teamName={teamDisplayName(winnerTeam)} players={players} colour={winnerTeam.colour} />
         )}
         {!anim && view.draw.step === 0 && <p className="draw__prompt">The draw is locked. Let's spin.</p>}
       </div>
@@ -273,13 +273,11 @@ function Draw({ view, anim, onLanded, onSpin }: { view: StageView; anim: Anim | 
 function FinalReveal({
   event,
   teamName,
-  badge,
   players,
   colour,
 }: {
   event: RevealEventView;
   teamName: string;
-  badge: string;
   colour: string;
   players: ReturnType<typeof playerMap>;
 }) {
@@ -302,7 +300,7 @@ function FinalReveal({
           </div>
           <p className="final-reveal__names">{names.map((p) => p!.name).join(names.length > 2 ? ", " : " & ")}</p>
           <p className="final-reveal__team">
-            are {badge} {teamName}
+            are {teamName}
           </p>
         </>
       )}

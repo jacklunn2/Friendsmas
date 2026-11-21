@@ -6,7 +6,7 @@ import type { MissionStatus, StageView } from "../../../shared/types";
 import { audioOn, sfx } from "../audio";
 import { Avatar, playerMap } from "../ui";
 
-const STAMP: Record<MissionStatus, string> = { completed: "Accomplished", noticed: "Rumbled", active: "Never tried" };
+const STAMP: Record<MissionStatus, string> = { completed: "Accomplished", noticed: "Failed", active: "Never tried" };
 const STEP_MS = 900;
 
 export function MissionsReveal({ view }: { view: StageView }) {

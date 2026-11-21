@@ -100,7 +100,6 @@ export function PollStage({ view, serverNow }: { view: StageView; serverNow: () 
               >
                 <span className="poll-bar__who">
                   {p && <Avatar player={p} className="poll-bar__photo" />}
-                  {t && <span className="poll-bar__badge">{t.badge}</span>}
                   <span className="poll-bar__name">{t ? teamDisplayName(t) : o.label}</span>
                   {win && <span className="poll-bar__crown" aria-label="Winner">👑</span>}
                 </span>

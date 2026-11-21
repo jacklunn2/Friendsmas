@@ -63,7 +63,7 @@ export function HouseFaceOff({ view }: { view: StageView }) {
           return (
             <li key={row.teamId} className={`faceoff-row${stage >= 1 ? (row.beat ? " is-beat" : " is-beaten") : ""}`} style={{ ...teamStyle(t), animationDelay: `${i * 150}ms` }}>
               <span className="faceoff-row__team">
-                {t.badge} {teamDisplayName(t)}
+                {teamDisplayName(t)}
                 <span className="faceoff-row__faces">
                   {t.memberIds.map((id) => {
                     const p = players.get(id);

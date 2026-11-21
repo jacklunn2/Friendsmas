@@ -50,9 +50,6 @@ export function TeamCard({ team, players, showSeats, highlightId, size = "md", f
   return (
     <article className={`team-card team-card--${size}`} style={teamStyle(team)}>
       <header className="team-card__head">
-        <span className="team-card__badge" aria-hidden>
-          {team.badge}
-        </span>
         <h3 className={`team-card__name${team.name ? "" : " team-card__name--pending"}`}>{teamDisplayName(team)}</h3>
       </header>
       <ul className="team-card__members">

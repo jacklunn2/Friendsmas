@@ -257,7 +257,7 @@ function Answers({
   const name = (ans: HostQuizAnswer) => {
     if (a.kind === "team") {
       const t = teams.get(ans.answererId);
-      return t ? `${t.badge} ${teamDisplayName(t)}` : "A team";
+      return t ? teamDisplayName(t) : "A team";
     }
     return players.get(ans.answererId)?.name ?? "A guest";
   };

@@ -58,7 +58,7 @@ export function QuizStage({ view, serverNow }: { view: StageView; serverNow: () 
       ? view.teams.map((t) => ({
           id: t.id,
           team: t,
-          label: `${t.badge} ${teamDisplayName(t)}`,
+          label: teamDisplayName(t),
           player: null,
           members: t.memberIds.map((id) => players.get(id)).filter((p) => !!p),
         }))

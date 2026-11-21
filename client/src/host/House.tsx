@@ -114,7 +114,7 @@ export function HousePad({ activity: a, view, run }: { activity: ActivityView; v
           {live && drawn && (
             <div className="house-pad__teams">
               {view.teams.map((t) => (
-                <TeamScore key={t.id} value={secret?.teamScores[t.id]} label={`${t.badge} ${teamDisplayName(t)}`} style={teamStyle(t)} onSave={(score) => run("house.teamScore", { activityId: a.id, teamId: t.id, score })} />
+                <TeamScore key={t.id} value={secret?.teamScores[t.id]} label={teamDisplayName(t)} style={teamStyle(t)} onSave={(score) => run("house.teamScore", { activityId: a.id, teamId: t.id, score })} />
               ))}
             </div>
           )}

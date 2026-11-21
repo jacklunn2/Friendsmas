@@ -66,7 +66,7 @@ export function PhonePoll({ view, send, serverNow }: { view: PlayerView; send: S
   const myPoints = reveal?.points[me.id] ?? 0;
   const labelFor = (key: string) => {
     const t = teams.get(key);
-    return t ? `${t.badge} ${t.name ?? `Team ${t.order + 1}`}` : (q.options.find((o) => o.key === key)?.label ?? "");
+    return t ? t.name ?? `Team ${t.order + 1}` : (q.options.find((o) => o.key === key)?.label ?? "");
   };
 
   return (
@@ -110,12 +110,7 @@ export function PhonePoll({ view, send, serverNow }: { view: PlayerView; send: S
                     aria-pressed={mine === o.key}
                   >
                     {p && <Avatar player={p} className="poll-option__photo" />}
-                    {t && (
-                      <span className="poll-option__badge" aria-hidden>
-                        {t.badge}
-                      </span>
-                    )}
-                    <span className="poll-option__label">{t ? labelFor(o.key).replace(/^\S+ /, "") : o.label}</span>
+                    <span className="poll-option__label">{t ? labelFor(o.key) : o.label}</span>
                   </button>
                 </li>
               );
