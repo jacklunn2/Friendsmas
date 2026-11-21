@@ -102,6 +102,7 @@ function base(s: ServerState, viewer: Viewer, now: number): PublicView {
     blackout: s.blackout,
     results: resultsView(s),
     quiz: quizView(s, true),
+    agenda: s.agenda.map((a) => ({ ...a })),
   };
 }
 

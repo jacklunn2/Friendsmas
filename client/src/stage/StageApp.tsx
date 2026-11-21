@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import QRCode from "qrcode";
 import { FINAL_REVEAL_MS, SPIN_MS, photoUrl, teamDisplayName, type RevealEventView, type StageView } from "../../../shared/types";
 import { audioOn, enableAudio, sfx } from "../audio";
 import { storage, useRoom, useTicker } from "../net";
 import { Avatar, ConnectionBanner, EventCodeContext, formatClock, playerMap, TeamCard, teamStyle, Wordmark } from "../ui";
 import { QuizStage } from "./QuizStage";
 import { ActivityIntro, ActivityResults, Standings } from "./Scoreboard";
+import { Welcome } from "./Welcome";
 import { Wheel } from "./Wheel";
 
 // Timing of one reveal inside the server's spin cooldown.
@@ -168,9 +168,11 @@ interface SceneProps {
 function StageScene({ view, anim, serverNow, onLanded, onSpin }: SceneProps) {
   if (view.intermission) return <Intermission />;
   const { phase } = view.draw;
-  if (phase === "draft") return <Arrivals view={view} />;
+  if (phase === "draft") return <Welcome view={view} trophyUrl={null} />;
   if (phase !== "complete" || anim) return <Draw view={view} anim={anim} onLanded={onLanded} onSpin={onSpin} />;
   switch (view.stage.screen) {
+    case "welcome":
+      return <Welcome view={view} trophyUrl={null} />;
     case "activity":
       return <ActivityIntro key={view.stage.activityId} view={view} serverNow={serverNow} />;
     case "quiz":
@@ -194,47 +196,6 @@ function Intermission() {
     <section className="scene scene--centre">
       <Wordmark className="wordmark--stage" />
       <p className="stage__lede">Back in a moment</p>
-    </section>
-  );
-}
-
-function Arrivals({ view }: { view: StageView }) {
-  const joinUrl = `${location.origin}/e/${view.eventCode}`;
-  const [qr, setQr] = useState("");
-  useEffect(() => {
-    QRCode.toString(joinUrl, { type: "svg", margin: 0, errorCorrectionLevel: "M", color: { dark: "#10241e", light: "#00000000" } })
-      .then(setQr)
-      .catch(() => setQr(""));
-  }, [joinUrl]);
-  const joined = view.players.filter((p) => p.status === "joined");
-  const expected = view.players.filter((p) => p.status === "expected");
-  const display = joinUrl.replace(/^https?:\/\//, "");
-
-  return (
-    <section className="scene arrivals">
-      <div className="arrivals__invite">
-        <Wordmark className="wordmark--stage" />
-        <p className="stage__lede">Scan to join the game</p>
-        <div className="arrivals__qr" dangerouslySetInnerHTML={{ __html: qr }} aria-label="QR code for the join link" role="img" />
-        <p className="arrivals__url">{display}</p>
-      </div>
-      <div className="arrivals__guests">
-        <h2 className="stage__heading">
-          {joined.length === 0 ? "Waiting for the first guest" : `${joined.length} here${expected.length ? `, ${expected.length} on the way` : ""}`}
-        </h2>
-        <ul className="arrivals__list">
-          {joined.map((p) => (
-            <li key={p.id} className="arrivals__guest">
-              <Avatar player={p} className="arrivals__avatar" /> {p.name}
-            </li>
-          ))}
-          {expected.map((p) => (
-            <li key={p.id} className="arrivals__guest arrivals__guest--expected">
-              {p.name}
-            </li>
-          ))}
-        </ul>
-      </div>
     </section>
   );
 }

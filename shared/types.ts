@@ -16,7 +16,7 @@ export type Role = "host" | "stage" | "player";
 export type ActivityKind = "team" | "individual";
 export type ScoringScheme = "placement" | "perCorrect" | "judged";
 export type EntryKind = "award" | "bonus" | "penalty";
-export type StageScreen = "teams" | "activity" | "quiz" | "results" | "standings" | "final";
+export type StageScreen = "teams" | "activity" | "quiz" | "results" | "standings" | "final" | "welcome";
 export type ActivityFormat = "live" | "quiz";
 export type QuestionType = "choice" | "truefalse" | "number" | "text";
 export type QuizPhase = "intro" | "open" | "closed" | "revealed";
@@ -231,7 +231,18 @@ export interface PublicView {
   results: ResultsView | null;
   /** The quiz on the TV, if any. */
   quiz: QuizView | null;
+  /** The day's running order, written by the host, for the welcome screen. */
+  agenda: AgendaItem[];
 }
+
+export interface AgendaItem {
+  id: string;
+  time: string;
+  item: string;
+}
+export const AGENDA_TIME_MAX = 12;
+export const AGENDA_ITEM_MAX = 60;
+export const AGENDA_MAX_ITEMS = 14;
 
 export interface MyTeamView extends PublicTeam {
   /** True when the host rejected the team's name and they may type a new one. */

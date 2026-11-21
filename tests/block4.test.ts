@@ -91,3 +91,27 @@ describe("the questionnaire", () => {
     expect(publicJson(s)).toBeTruthy();
   });
 });
+
+describe("the welcome screen", () => {
+  it("shows the host's agenda, keeping row ids and dropping blank rows", () => {
+    const s = setup(2);
+    runAction(s, HOST, "agenda.save", { items: [{ time: "12:00", item: "Arrivals" }, { time: "", item: "" }, { time: "1pm", item: "  The draw " }] }, T0);
+    const first = stageView(s, T0).agenda;
+    expect(first.map((a) => [a.time, a.item])).toEqual([["12:00", "Arrivals"], ["1pm", "The draw"]]);
+    runAction(s, HOST, "agenda.save", { items: [first[1], { ...first[0], time: "12:30" }] }, T0);
+    const second = stageView(s, T0).agenda;
+    expect(second.map((a) => a.id)).toEqual([first[1].id, first[0].id]);
+    expect(playerView(s, s.players[0].id, T0).agenda).toHaveLength(2);
+    expect(() => runAction(s, HOST, "agenda.save", { items: [{ time: "2pm", item: "" }] }, T0)).toThrow(/description/);
+    expect(() => runAction(s, HOST, "agenda.save", { items: Array.from({ length: 15 }, () => ({ item: "x" })) }, T0)).toThrow(/up to 14/);
+  });
+
+  it("can go back on the TV after the draw, and the agenda survives starting fresh", () => {
+    const s = setup(2);
+    runAction(s, HOST, "agenda.save", { items: [{ time: "12:00", item: "Arrivals" }] }, T0);
+    runAction(s, HOST, "stage.show", { screen: "welcome" }, T0);
+    expect(stageView(s, T0).stage.screen).toBe("welcome");
+    runAction(s, HOST, "event.startFresh", { confirm: "START FRESH" }, T0);
+    expect(s.agenda).toHaveLength(1);
+  });
+});

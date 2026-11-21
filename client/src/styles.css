@@ -340,67 +340,6 @@ textarea {
   height: 100%;
 }
 
-/* Arrivals */
-.arrivals {
-  display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  gap: 4vw;
-  align-items: center;
-}
-.arrivals__invite {
-  display: grid;
-  justify-items: start;
-  gap: 1.4vw;
-}
-.arrivals__qr {
-  width: min(21vw, 42vh);
-  aspect-ratio: 1;
-  background: var(--snow);
-  padding: 1.3vw;
-  border-radius: 1.2vw;
-  box-shadow: 0 0 0 0.45vw var(--brass);
-}
-.arrivals__qr svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-.arrivals__url {
-  margin: 0;
-  font-size: 1.5vw;
-  color: var(--frost);
-  word-break: break-all;
-}
-.arrivals__guests {
-  align-self: stretch;
-  display: grid;
-  align-content: center;
-  gap: 1.6vw;
-}
-.arrivals__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.9vw;
-}
-.arrivals__guest {
-  font-size: 1.9vw;
-  font-weight: 700;
-  background: var(--spruce);
-  border-radius: 999px;
-  padding: 0.35em 0.9em;
-  animation: pop-in 600ms cubic-bezier(0.2, 1.4, 0.4, 1);
-}
-.arrivals__guest--expected {
-  background: transparent;
-  border: 2px dashed var(--spruce-line);
-  color: var(--mist);
-  font-weight: 400;
-  animation: none;
-}
-
 /* Draw */
 .draw {
   display: grid;
@@ -1309,16 +1248,6 @@ textarea {
 }
 img.member__emoji {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--team) 70%, transparent);
-}
-.arrivals__guest {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4em;
-}
-.arrivals__avatar {
-  width: 1.5em;
-  height: 1.5em;
-  margin: -0.2em 0 -0.2em -0.5em;
 }
 .chip .avatar,
 .row__name .avatar {
@@ -3091,4 +3020,262 @@ img.member__emoji {
 }
 .inline-form__row > .field {
   flex: 1 1 10rem;
+}
+
+/* TV: welcome screen */
+.welcome {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "head side"
+    "menu side"
+    "here side";
+  gap: 1.4vw 3vw;
+}
+.welcome__head {
+  grid-area: head;
+  display: flex;
+  align-items: baseline;
+  gap: 1.2vw;
+}
+.welcome__kicker {
+  margin: 0;
+  font-size: 2vw;
+  color: var(--mist);
+}
+.welcome__wordmark {
+  font-size: 5vw;
+  line-height: 1;
+}
+.welcome__title {
+  margin: 0 0 0.8vw;
+  font-family: var(--display);
+  font-weight: 400;
+  color: var(--brass);
+  font-size: 2.4vw;
+}
+.welcome__menu {
+  grid-area: menu;
+  min-height: 0;
+  overflow: hidden;
+}
+.welcome__groups {
+  columns: 2;
+  column-gap: 2.6vw;
+}
+.welcome__group {
+  break-inside: avoid;
+  margin-bottom: 1.3vw;
+}
+.welcome__group-title {
+  margin: 0 0 0.5vw;
+  font-size: 1.35vw;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--frost);
+}
+.welcome__dishes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6vw;
+}
+.welcome__dish {
+  display: flex;
+  align-items: center;
+  gap: 0.9vw;
+  animation: pop-in 600ms cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+.welcome__dish-photo {
+  width: 3.4vw;
+  height: 3.4vw;
+  font-size: 1.9vw;
+  border-radius: 50%;
+  background: var(--spruce);
+  box-shadow: 0 0 0 0.18vw var(--brass);
+}
+.welcome__dish-text {
+  display: grid;
+  line-height: 1.15;
+  min-width: 0;
+}
+.welcome__dish-name {
+  font-size: 1.7vw;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.welcome__dish-by {
+  font-size: 1.2vw;
+  color: var(--mist);
+}
+.welcome__dish-diet {
+  color: var(--frost);
+}
+.welcome__menu.is-dense .welcome__dish-photo {
+  width: 2.7vw;
+  height: 2.7vw;
+}
+.welcome__menu.is-dense .welcome__dish-name {
+  font-size: 1.4vw;
+}
+.welcome__menu.is-dense .welcome__dishes {
+  gap: 0.4vw;
+}
+.welcome__empty {
+  font-size: 1.8vw;
+  color: var(--mist);
+  margin: 0;
+}
+.welcome__side {
+  grid-area: side;
+  display: flex;
+  flex-direction: column;
+  gap: 1.6vw;
+  min-height: 0;
+}
+.welcome__trophy {
+  margin: 0;
+  align-self: center;
+  position: relative;
+  text-align: center;
+}
+.welcome__trophy img {
+  display: block;
+  max-height: 30vh;
+  max-width: 100%;
+  margin: 0 auto;
+  border-radius: 1vw;
+  object-fit: contain;
+  filter: drop-shadow(0 0 2.4vw rgba(242, 181, 68, 0.55));
+  animation: trophy-glow 3.6s ease-in-out infinite alternate;
+}
+.welcome__trophy figcaption {
+  margin-top: 0.4vw;
+  font-family: var(--display);
+  color: var(--brass);
+  font-size: 1.6vw;
+}
+@keyframes trophy-glow {
+  from {
+    filter: drop-shadow(0 0 1.2vw rgba(242, 181, 68, 0.35));
+  }
+  to {
+    filter: drop-shadow(0 0 3vw rgba(242, 181, 68, 0.75));
+  }
+}
+.welcome__agenda {
+  min-height: 0;
+  overflow: hidden;
+}
+.agenda {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45vw;
+}
+.agenda__row {
+  display: grid;
+  grid-template-columns: 6.5vw minmax(0, 1fr);
+  gap: 1vw;
+  font-size: 1.45vw;
+  padding-bottom: 0.45vw;
+  border-bottom: 1px solid var(--spruce-line);
+}
+.agenda__time {
+  font-weight: 700;
+  color: var(--brass);
+  font-variant-numeric: tabular-nums;
+}
+.welcome__join {
+  margin-top: auto;
+  align-self: flex-end;
+  display: flex;
+  align-items: flex-end;
+  gap: 1.2vw;
+}
+.welcome__join-text {
+  margin: 0;
+  display: grid;
+  text-align: right;
+  font-size: 1.7vw;
+  font-weight: 700;
+  order: -1;
+}
+.welcome__url {
+  font-size: 1.05vw;
+  font-weight: 400;
+  color: var(--frost);
+  word-break: break-all;
+  max-width: 14vw;
+}
+.welcome__qr {
+  width: min(13vw, 26vh);
+  aspect-ratio: 1;
+  background: var(--snow);
+  padding: 0.9vw;
+  border-radius: 1vw;
+  box-shadow: 0 0 0 0.35vw var(--brass);
+  flex: none;
+}
+.welcome__qr svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.welcome__here {
+  grid-area: here;
+  display: flex;
+  align-items: center;
+  gap: 1.4vw;
+  min-width: 0;
+}
+.welcome__count {
+  font-size: 1.5vw;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.welcome__faces {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 0.5vw;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.welcome__face {
+  display: grid;
+  justify-items: center;
+  animation: pop-in 600ms cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+.welcome__face-photo {
+  width: 3.6vw;
+  height: 3.6vw;
+  font-size: 2vw;
+  border-radius: 50%;
+  background: var(--spruce);
+  border: 0.18vw solid var(--brass);
+}
+.welcome__face-name {
+  font-size: 0.85vw;
+  color: var(--mist);
+  max-width: 4.6vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agenda-edit {
+  display: grid;
+  gap: 0.4rem;
+}
+.agenda-edit__row {
+  display: grid;
+  grid-template-columns: 6rem minmax(0, 1fr) auto;
+  gap: 0.4rem;
+  align-items: center;
 }

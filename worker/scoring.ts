@@ -299,6 +299,10 @@ export const scoringHost: Record<string, Handler> = {
       s.stage = { screen: "teams", activityId: null, timer: null };
       return { audit: ["stage.show", "Teams on the TV"] };
     }
+    if (screen === "welcome") {
+      s.stage = { screen: "welcome", activityId: null, timer: null };
+      return { audit: ["stage.show", "Welcome screen on the TV"] };
+    }
     if (screen === "standings") {
       if (!s.snapshots.length) throw new UserError("Reveal the standings first.");
       s.stage = { screen: s.snapshots.at(-1)!.final ? "final" : "standings", activityId: null, timer: null };

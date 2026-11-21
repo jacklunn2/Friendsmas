@@ -27,6 +27,7 @@ import { pick, randomDigits, randomToken, shuffle } from "./random";
 import { guestsHost, guestsPlayer } from "./guests";
 import { quizAlarm, quizHost, quizPlayer } from "./quiz";
 import { scoringHost } from "./scoring";
+import { showHost } from "./show";
 import { freshDraw, freshQuiz, freshStage, newId, type RevealEvent, type ServerPlayer, type ServerState, type ServerTeam } from "./state";
 
 export { UserError, findPlayer, findTeam };
@@ -485,6 +486,7 @@ const host: Record<string, Handler> = {
   ...scoringHost,
   ...quizHost,
   ...guestsHost,
+  ...showHost,
 };
 
 const player: Record<string, Handler> = {

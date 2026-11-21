@@ -154,7 +154,7 @@ export function ScoringPanel({ view, run, notify, serverNow }: Props) {
 
 function tvStatus(view: HostView): string {
   if (view.intermission) return "Intermission";
-  if (view.draw.phase === "draft") return "Arrivals";
+  if (view.draw.phase === "draft") return "Welcome screen";
   if (view.draw.phase !== "complete") return "The team draw";
   const a = view.activities.find((x) => x.id === view.stage.activityId);
   switch (view.stage.screen) {
@@ -168,6 +168,8 @@ function tvStatus(view: HostView): string {
       return view.blackout ? "Leaderboard (frozen)" : "Leaderboard";
     case "final":
       return "Final results";
+    case "welcome":
+      return "Welcome screen";
     default:
       return view.naming.phase === "open" ? "Team naming" : "The teams";
   }
@@ -185,6 +187,9 @@ function TvControls({ view, run }: { view: HostView; run: Run }) {
     <div className="tv-controls" role="group" aria-label="What's on the TV">
       <button className={`btn btn--small ${screen === "teams" ? "btn--on" : "btn--ghost"}`} onClick={() => run("stage.show", { screen: "teams" })}>
         Show the teams
+      </button>
+      <button className={`btn btn--small ${screen === "welcome" ? "btn--on" : "btn--ghost"}`} onClick={() => run("stage.show", { screen: "welcome" })}>
+        Show the welcome screen
       </button>
       <button
         className={`btn btn--small ${screen === "standings" || screen === "final" ? "btn--on" : "btn--ghost"}`}

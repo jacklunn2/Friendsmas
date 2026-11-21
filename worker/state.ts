@@ -1,4 +1,5 @@
 import type {
+  AgendaItem,
   ActivityFormat,
   DishCategory,
   ActivityKind,
@@ -182,6 +183,7 @@ export interface ServerState {
   blackout: boolean;
   stage: StageState;
   quiz: QuizState;
+  agenda: AgendaItem[];
 }
 
 export function freshStage(): StageState {
@@ -197,6 +199,7 @@ export function migrate(s: ServerState): ServerState {
   s.blackout ??= false;
   s.stage ??= freshStage();
   s.quiz ??= freshQuiz();
+  s.agenda ??= [];
   // Block 4: teams type their own names; suggestions and mottos are gone.
   delete (s as { offeredNames?: unknown }).offeredNames;
   for (const t of s.teams) {
@@ -238,6 +241,7 @@ export function freshState(now: number): ServerState {
     blackout: false,
     stage: freshStage(),
     quiz: freshQuiz(),
+    agenda: [],
   };
 }
 

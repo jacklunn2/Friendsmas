@@ -162,6 +162,11 @@ async function main() {
   const badAnswers = await phones.Ava.req("player.answers", { dish: "Trifle", category: "pudding", facts: ["x"] }).catch((e) => e.message);
   check(/kind of dish/.test(badAnswers), "a made-up dish category is refused");
 
+  // --- Block 4: the welcome screen's agenda
+  await host.req("agenda.save", { items: [{ time: "12:00", item: "Arrivals and mulled wine" }, { time: "13:00", item: "The draw" }, { time: "13:30", item: "Lunch" }] });
+  await stage.until((v) => v.agenda.length === 3);
+  check(stage.view.agenda[1].item === "The draw", "the agenda reaches the welcome screen");
+
   // --- Odd number: 11 joined
   const lockErr = await host.req("draw.lock").catch((e) => e.message);
   check(/odd number/.test(lockErr), "locking 11 guests needs an odd-number choice");
