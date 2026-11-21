@@ -38,9 +38,8 @@ export interface PublicTeam {
   order: number;
   colour: string;
   badge: string;
-  /** null until the team picks a name. Display as "Team N" meanwhile. */
+  /** null until the team types a name. Display as "Team N" meanwhile. */
   name: string | null;
-  motto: string;
   memberCount: number;
   /** Members revealed so far, in reveal order. */
   memberIds: string[];
@@ -235,8 +234,8 @@ export interface PublicView {
 }
 
 export interface MyTeamView extends PublicTeam {
-  suggestions: string[];
-  rerollUsed: boolean;
+  /** True when the host rejected the team's name and they may type a new one. */
+  canRename: boolean;
 }
 
 export interface PlayerView extends PublicView {
@@ -292,8 +291,6 @@ export interface HostView extends PublicView {
   role: "host";
   roster: HostPlayer[];
   audit: AuditEntry[];
-  /** Team names suggested to each team, so the host can see what's on offer. */
-  suggestions: Record<string, string[]>;
   spinCooldownUntil: number | null;
   /** Every score change, newest first. */
   ledger: LedgerEntryView[];
@@ -334,7 +331,7 @@ export interface ClientRequest {
 export const SPIN_MS = 8000;
 export const FINAL_REVEAL_MS = 5600;
 export const NAMING_MS = 120_000;
-export const MOTTO_MAX = 60;
+export const TEAM_NAME_MAX = 24;
 export const NAME_MAX = 24;
 export const ACTIVITY_NAME_MAX = 40;
 export const REASON_MAX = 60;

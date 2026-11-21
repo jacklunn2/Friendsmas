@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   FINAL_REVEAL_MS,
-  MOTTO_MAX,
+  TEAM_NAME_MAX,
   NAME_MAX,
   SPIN_MS,
   formatPoints,
@@ -484,77 +484,68 @@ function MyStandings({ view, serverNow }: { view: PlayerView; serverNow: () => n
 function Naming({ view, send, serverNow }: { view: PlayerView; send: Send; serverNow: () => number }) {
   const team = view.myTeam!;
   const open = view.naming.phase === "open";
+  const canType = open || team.canRename;
   useTicker(500, open);
+  const [name, setName] = useState(team.name ?? "");
+  const [editing, setEditing] = useState(!team.name);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [motto, setMotto] = useState(team.motto);
-  const [mottoSaved, setMottoSaved] = useState(false);
 
-  const run = async (action: string, payload?: Record<string, unknown>) => {
+  // Keep the box in step when a teammate (or the host) changes the name.
+  useEffect(() => {
+    if (!editing) setName(team.name ?? "");
+    if (!team.name) setEditing(true);
+  }, [team.name, editing]);
+
+  if (!canType) return null;
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      await send(action, payload);
-    } catch (e) {
-      setError((e as Error).message);
+      await send("team.name", { name });
+      setEditing(false);
+    } catch (err) {
+      setError((err as Error).message);
     } finally {
       setBusy(false);
     }
   };
 
-  if (!open && !team.name) return null;
-  // The motto can be set during naming and until the games begin.
-  const gamesStarted = !!view.standings || view.stage.screen !== "teams";
-  if (!open && gamesStarted) return null;
-
   return (
     <div className="naming">
-      {open && !team.name && (
+      <div className="naming__head">
+        <h2 className="phone__subtitle">{team.canRename ? "Choose a new team name" : "Name your team"}</h2>
+        {open && <span className="naming__clock">{formatClock((view.naming.deadline ?? 0) - serverNow())}</span>}
+      </div>
+      {team.canRename && <p className="phone__muted">The host asked for a different name.</p>}
+      {team.name && !editing ? (
         <>
-          <div className="naming__head">
-            <h2 className="phone__subtitle">Choose your team name</h2>
-            <span className="naming__clock">{formatClock((view.naming.deadline ?? 0) - serverNow())}</span>
-          </div>
-          <p className="phone__muted">Either of you can choose. If time runs out, you get the first one.</p>
-          <div className="naming__options">
-            {team.suggestions.map((s) => (
-              <button key={s} className="naming__option" disabled={busy} onClick={() => run("team.pick", { name: s })}>
-                {s}
-              </button>
-            ))}
-          </div>
-          {!team.rerollUsed && (
-            <button className="btn btn--ghost btn--block" disabled={busy} onClick={() => run("team.reroll")}>
-              Show three different names (one try only)
-            </button>
-          )}
-        </>
-      )}
-      {team.name && (
-        <form
-          className="naming__motto"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            await run("team.motto", { motto });
-            setMottoSaved(true);
-          }}
-        >
-          <label className="field">
-            <span className="field__label">Team motto (optional)</span>
-            <input
-              className="input"
-              value={motto}
-              maxLength={MOTTO_MAX}
-              placeholder="Sleigh first, ask questions later"
-              onChange={(e) => {
-                setMotto(e.target.value);
-                setMottoSaved(false);
-              }}
-            />
-          </label>
-          <button className="btn btn--secondary" disabled={busy || motto === team.motto}>
-            {mottoSaved && motto === team.motto ? "Motto saved" : "Save motto"}
+          <p className="naming__chosen">{team.name}</p>
+          <p className="phone__muted">Either of you can change it until time's up.</p>
+          <button className="btn btn--ghost btn--block" onClick={() => setEditing(true)}>
+            Change the name
           </button>
+        </>
+      ) : (
+        <form className="naming__form" onSubmit={submit}>
+          <input
+            className="input naming__input"
+            value={name}
+            maxLength={TEAM_NAME_MAX}
+            autoCapitalize="words"
+            autoComplete="off"
+            placeholder="Your team name"
+            aria-label="Team name"
+            onChange={(e) => setName(e.target.value)}
+          />
+          <div className="naming__row">
+            <span className="phone__muted">{TEAM_NAME_MAX - name.length} characters left</span>
+            <button className="btn btn--primary" disabled={busy || !name.trim()}>
+              {team.name ? "Save" : "Use this name"}
+            </button>
+          </div>
         </form>
       )}
       <ErrorText error={error} />

@@ -211,21 +211,22 @@ async function main() {
     if (!teamsByPhone.has(c.view.myTeam.id)) teamsByPhone.set(c.view.myTeam.id, c);
   }
   const reps = [...teamsByPhone.values()];
-  await reps[0].req("team.reroll");
-  await reps[0].until((v) => v.myTeam.rerollUsed);
-  await reps[0].req("team.pick", { name: reps[0].view.myTeam.suggestions[2] });
-  await reps[1].req("team.pick", { name: reps[1].view.myTeam.suggestions[0] });
-  await reps[1].req("team.motto", { motto: "Sleigh first, ask questions later" });
-  const wrongPick = await reps[2].req("team.pick", { name: "Not a suggestion" }).catch((e) => e.message);
-  check(/suggestions/.test(wrongPick), "teams can only pick from their own suggestions");
+  const typedNames = ["Rehearsal Reindeer", "Tinsel Trouble", "The Sprouts", "Pudding Club", "Bauble Heads", "Last Team"];
+  for (let i = 0; i < reps.length; i++) await reps[i].req("team.name", { name: typedNames[i] });
+  const dupe = await reps[1].req("team.name", { name: "rehearsal reindeer" }).catch((e) => e.message);
+  check(/Another team/.test(dupe), "two teams can't have the same name");
   await host.req("naming.close");
   await stage.until((v) => v.naming.phase === "closed");
-  check(stage.view.teams.every((t) => t.name), "every team has a name after naming closes");
-  check(stage.view.teams.some((t) => t.motto), "mottos reach the stage");
+  check(stage.view.teams.every((t) => t.name), "every team typed a name");
+  await host.req("team.rejectName", { teamId: reps[0].view.myTeam.id });
+  await reps[0].until((v) => v.myTeam.canRename);
+  await reps[0].req("team.name", { name: "Rehearsal Reindeer II" });
+  await stage.until((v) => v.teams.some((t) => t.name === "Rehearsal Reindeer II"));
+  check(true, "a rejected team can type a new name after naming closes");
   console.log("  Teams:");
   for (const t of stage.view.teams) {
     const members = t.memberIds.map((id) => stage.view.players.find((p) => p.id === id).name).join(", ");
-    console.log(`    ${t.badge} ${t.name}: ${members}${t.motto ? ` — “${t.motto}”` : ""}`);
+    console.log(`    ${t.badge} ${t.name}: ${members}`);
   }
 
   // --- Photos

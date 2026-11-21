@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   EXTRA_BADGES,
-  MOTTO_MAX,
+  TEAM_NAME_MAX,
   TEAM_BADGES,
   TEAM_COLOURS,
   teamDisplayName,
@@ -198,7 +198,7 @@ function NowPanel({ view, run, serverNow }: { view: HostView; run: Run; serverNo
     );
   } else if (naming.phase === "idle") {
     label = "Open team naming (2 minutes)";
-    hint = "Each team picks a name on their phones. Unchosen teams get their first suggestion.";
+    hint = "Each team types its own name on their phones. Teams that don't choose stay as Team 1, Team 2 and so on.";
     onClick = () => act("naming.start");
   } else if (namingOpen) {
     const named = view.teams.filter((t) => t.name).length;
@@ -597,7 +597,6 @@ function TeamsPanel({ view, run }: { view: HostView; run: Run }) {
             team={t}
             teams={view.teams}
             players={players}
-            suggestions={view.suggestions[t.id] ?? []}
             complete={complete}
             run={run}
           />
@@ -644,21 +643,17 @@ function TeamEditor({
   team,
   teams,
   players,
-  suggestions,
   complete,
   run,
 }: {
   team: PublicTeam;
   teams: PublicTeam[];
   players: Map<string, HostPlayer>;
-  suggestions: string[];
   complete: boolean;
   run: Run;
 }) {
   const [name, setName] = useState(team.name ?? "");
-  const [motto, setMotto] = useState(team.motto);
   useEffect(() => setName(team.name ?? ""), [team.name]);
-  useEffect(() => setMotto(team.motto), [team.motto]);
 
   return (
     <article className="team-editor" style={teamStyle(team)}>
@@ -713,40 +708,29 @@ function TeamEditor({
         <input
           className="input input--small"
           value={name}
-          placeholder={suggestions[0] ?? "Team name"}
-          list={`sugg-${team.id}`}
+          maxLength={TEAM_NAME_MAX}
+          placeholder={`Team ${team.order + 1}`}
           onChange={(e) => setName(e.target.value)}
           aria-label="Team name"
         />
-        <datalist id={`sugg-${team.id}`}>
-          {suggestions.map((s) => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
         <button className="btn btn--small btn--secondary" disabled={!name.trim() || name === team.name}>
           Save name
         </button>
+        {team.name && (
+          <button
+            type="button"
+            className="btn btn--small btn--ghost"
+            title="Clear the name and ask the team to type a new one"
+            onClick={() => {
+              if (confirm(`Reject "${team.name}"? The team will be asked to type a new name on their phones.`)) {
+                run("team.rejectName", { teamId: team.id }, "Name rejected");
+              }
+            }}
+          >
+            Reject
+          </button>
+        )}
       </form>
-      <form
-        className="inline-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          run("team.update", { teamId: team.id, motto }, "Motto saved");
-        }}
-      >
-        <input
-          className="input input--small"
-          value={motto}
-          maxLength={MOTTO_MAX}
-          placeholder="Motto (optional)"
-          onChange={(e) => setMotto(e.target.value)}
-          aria-label="Team motto"
-        />
-        <button className="btn btn--small btn--secondary" disabled={motto === team.motto}>
-          Save motto
-        </button>
-      </form>
-
       <div className="team-editor__look">
         <div className="swatches" role="radiogroup" aria-label="Team colour">
           {TEAM_COLOURS.map((c) => (
@@ -794,7 +778,7 @@ function ResetDialog({ onClose, run }: { onClose: () => void; run: Run }) {
         }}
       >
         <h2 className="dialog__title">Reset the team draw?</h2>
-        <p>Every team, team name and motto will be cleared, and the guest list goes back to the draw set-up.</p>
+        <p>Every team and team name will be cleared, and the guest list goes back to the draw set-up.</p>
         <label className="field">
           <span className="field__label">Type RESET to confirm</span>
           <input className="input" value={text} onChange={(e) => setText(e.target.value)} autoFocus />

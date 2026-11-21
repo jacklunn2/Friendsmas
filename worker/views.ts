@@ -51,7 +51,6 @@ function base(s: ServerState, viewer: Viewer, now: number): PublicView {
     colour: t.colour,
     badge: t.badge,
     name: t.name,
-    motto: t.motto,
     memberCount: t.memberIds.length,
     memberIds: t.memberIds.filter((id) => revealed.has(id)),
   }));
@@ -162,7 +161,7 @@ export function playerView(s: ServerState, playerId: string | null, now: number)
     myQuizAnswer: myQuizAnswer(s, raw?.id ?? null),
     myTeam:
       myTeamPublic && myTeamRaw
-        ? { ...myTeamPublic, suggestions: myTeamRaw.suggestions, rerollUsed: myTeamRaw.rerollUsed }
+        ? { ...myTeamPublic, canRename: !!myTeamRaw.canRename }
         : null,
     claimable: me
       ? []
@@ -187,7 +186,6 @@ export function hostView(s: ServerState, audit: AuditEntry[], now: number): Host
       rejoinExpires: p.rejoinExpires && p.rejoinExpires > now ? p.rejoinExpires : null,
     })),
     audit,
-    suggestions: Object.fromEntries(s.teams.map((t) => [t.id, t.suggestions])),
     spinCooldownUntil: spinCooldownUntil(s),
     ledger: s.ledger
       .slice()

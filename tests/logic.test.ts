@@ -177,23 +177,32 @@ describe("after the draw", () => {
     expect(s.teams.map((t) => t.memberIds.length).sort()).toEqual([2, 2, 3]);
   });
 
-  it("runs team naming and fills in names when time runs out", () => {
+  it("lets teams type their own names until time runs out, and lets the host reject one", () => {
     const { s } = setup(4);
     runAction(s, HOST, "draw.lock", {}, T0);
     const end = revealAll(s);
-    const r = runAction(s, HOST, "naming.start", {}, end);
-    expect(r.alarmAt).toBe(end + 120_000);
+    runAction(s, HOST, "naming.start", {}, end);
     const [a, b] = s.teams;
     const playerA: Actor = { role: "player", playerId: a.memberIds[0] };
-    runAction(s, playerA, "team.reroll", {}, end);
-    expect(() => runAction(s, playerA, "team.reroll", {}, end)).toThrow(/already used/);
-    runAction(s, playerA, "team.pick", { name: a.suggestions[1] }, end);
-    expect(a.name).toBe(a.suggestions[1]);
+    const partnerA: Actor = { role: "player", playerId: a.memberIds[1] };
+    const playerB: Actor = { role: "player", playerId: b.memberIds[0] };
+    runAction(s, playerA, "team.name", { name: "  The   Elf Fighters " }, end);
+    expect(a.name).toBe("The Elf Fighters");
+    runAction(s, partnerA, "team.name", { name: "Elf Fighters" }, end);
+    expect(a.name).toBe("Elf Fighters");
+    expect(() => runAction(s, playerB, "team.name", { name: "elf fighters" }, end)).toThrow(/Another team/);
+    expect(() => runAction(s, playerB, "team.name", { name: "x".repeat(25) }, end)).toThrow(/24 characters/);
     expect(onAlarm(s, end + 120_000)).toBe(true);
-    expect(b.name).toBe(b.suggestions[0]);
     expect(s.naming.phase).toBe("closed");
-    // Suggestions never repeat across teams
-    const offered = s.offeredNames;
-    expect(new Set(offered).size).toBe(offered.length);
+    expect(b.name).toBeNull();
+    expect(() => runAction(s, playerA, "team.name", { name: "Too late" }, end)).toThrow(/closed/);
+    // The host rejects a name: that team may type a new one, once.
+    runAction(s, HOST, "team.rejectName", { teamId: a.id }, end);
+    expect(a.name).toBeNull();
+    runAction(s, playerA, "team.name", { name: "Nice Elves" }, end);
+    expect(a.name).toBe("Nice Elves");
+    expect(() => runAction(s, playerA, "team.name", { name: "Naughty Elves" }, end)).toThrow(/closed/);
+    runAction(s, HOST, "team.update", { teamId: b.id, name: "Host's Choice" }, end);
+    expect(b.name).toBe("Host's Choice");
   });
 });

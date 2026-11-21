@@ -236,11 +236,6 @@ textarea {
   display: grid;
   gap: 0.35em;
 }
-.team-card__motto {
-  margin: 0.6em 0 0;
-  color: var(--mist);
-  font-style: italic;
-}
 .team-card--lg {
   font-size: 1.15em;
 }
@@ -776,27 +771,6 @@ textarea {
   color: var(--brass);
   font-size: 1.5rem;
   font-variant-numeric: tabular-nums;
-}
-.naming__options {
-  display: grid;
-  gap: 0.5rem;
-}
-.naming__option {
-  text-align: left;
-  font-family: var(--display);
-  font-size: 1.25rem;
-  padding: 0.75rem 1rem;
-  border-radius: 12px;
-  border: 2px solid var(--spruce-line);
-  background: var(--spruce);
-  cursor: pointer;
-}
-.naming__option:hover:not(:disabled) {
-  border-color: var(--team);
-}
-.naming__motto {
-  display: grid;
-  gap: 0.5rem;
 }
 
 /* =================================================================== HOST */
@@ -2896,4 +2870,27 @@ img.member__emoji {
   font-weight: 700;
   color: var(--mist);
   margin-bottom: 0.5vw;
+}
+
+/* Typed team names */
+.naming__chosen {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 1.7rem;
+  line-height: 1.15;
+  color: var(--team, var(--brass));
+}
+.naming__form {
+  display: grid;
+  gap: 0.5rem;
+}
+.naming__input {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+.naming__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
 }

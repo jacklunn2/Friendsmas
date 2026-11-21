@@ -75,7 +75,6 @@ export function TeamCard({ team, players, showSeats, highlightId, size = "md", f
           </li>
         ))}
       </ul>
-      {team.motto && <p className="team-card__motto">“{team.motto}”</p>}
       {footer}
     </article>
   );

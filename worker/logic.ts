@@ -5,9 +5,9 @@ import {
   AVATARS,
   EXTRA_BADGES,
   FINAL_REVEAL_MS,
-  MOTTO_MAX,
   NAME_MAX,
   NAMING_MS,
+  TEAM_NAME_MAX,
   SPIN_MS,
   TEAM_BADGES,
   TEAM_COLOURS,
@@ -27,7 +27,6 @@ import { pick, randomDigits, randomToken, shuffle } from "./random";
 import { quizAlarm, quizHost, quizPlayer } from "./quiz";
 import { scoringHost } from "./scoring";
 import { freshDraw, freshQuiz, freshStage, newId, type RevealEvent, type ServerPlayer, type ServerState, type ServerTeam } from "./state";
-import { TEAM_NAMES } from "./teamNames";
 
 export { UserError, findPlayer, findTeam };
 export type { Actor, ActionResult };
@@ -86,14 +85,16 @@ function requireDraft(s: ServerState, what: string) {
 // ---------------------------------------------------------------------------
 // Team names
 
-function freshSuggestions(s: ServerState, count: number): string[] {
-  const used = new Set(s.offeredNames);
-  for (const t of s.teams) if (t.name) used.add(t.name);
-  let pool = TEAM_NAMES.filter((n) => !used.has(n));
-  if (pool.length < count) pool = TEAM_NAMES.filter((n) => !s.teams.some((t) => t.name === n));
-  const chosen = shuffle(pool).slice(0, count);
-  s.offeredNames.push(...chosen);
-  return chosen;
+/** Checks a team name typed on a phone or in the control room. */
+function teamName(s: ServerState, raw: unknown, teamId: string): string {
+  if (typeof raw !== "string") throw new UserError("Type a team name.");
+  const name = raw.trim().replace(/\s+/g, " ");
+  if (!name) throw new UserError("Type a team name.");
+  if (name.length > TEAM_NAME_MAX) throw new UserError(`Team names must be ${TEAM_NAME_MAX} characters or fewer.`);
+  if (s.teams.some((x) => x.id !== teamId && x.name?.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+    throw new UserError("Another team already has that name.");
+  }
+  return name;
 }
 
 // ---------------------------------------------------------------------------
@@ -139,16 +140,12 @@ function lockDraw(s: ServerState, now: number): ActionResult {
       colour: TEAM_COLOURS[i % TEAM_COLOURS.length],
       badge: TEAM_BADGES[i % TEAM_BADGES.length],
       name: null,
-      motto: "",
       memberIds: order.slice(cursor, cursor + size),
-      suggestions: [],
-      rerollUsed: false,
     });
     cursor += size;
   });
   s.teams = teams;
   for (const t of teams) {
-    t.suggestions = freshSuggestions(s, 3);
     for (const id of t.memberIds) findPlayer(s, id).teamId = t.id;
   }
   s.draw.events = buildEvents(teams);
@@ -193,7 +190,6 @@ function resetDraw(s: ServerState, p: Payload): ActionResult {
   }
   for (const pl of s.players) pl.teamId = null;
   s.teams = [];
-  s.offeredNames = [];
   s.draw = freshDraw(s.draw.revealMode, s.draw.oddFallback);
   s.naming = { phase: "idle", deadline: null };
   clearScores(s);
@@ -224,7 +220,6 @@ function startFresh(s: ServerState, p: Payload): ActionResult {
     if (pl.status === "left") pl.status = pl.token ? "joined" : "expected";
   }
   s.teams = [];
-  s.offeredNames = [];
   s.draw = freshDraw(s.draw.revealMode, null);
   s.naming = { phase: "idle", deadline: null };
   s.intermission = false;
@@ -237,7 +232,7 @@ function startFresh(s: ServerState, p: Payload): ActionResult {
 // Naming
 
 function closeNamingNow(s: ServerState): void {
-  for (const t of s.teams) if (!t.name) t.name = t.suggestions[0] ?? `Team ${t.order + 1}`;
+  // Teams that didn't type a name stay as "Team N"; the host can name them.
   s.naming = { phase: "closed", deadline: null };
 }
 
@@ -440,16 +435,10 @@ const host: Record<string, Handler> = {
     const t = findTeam(s, p.teamId);
     const changes: string[] = [];
     if (p.name !== undefined) {
-      const name = str(p, "name", { max: 40, label: "a team name" });
-      if (s.teams.some((x) => x.id !== t.id && x.name?.toLocaleLowerCase() === name.toLocaleLowerCase())) {
-        throw new UserError("Another team already has that name.");
-      }
+      const name = teamName(s, p.name, t.id);
       t.name = name;
+      t.canRename = false;
       changes.push(`name "${name}"`);
-    }
-    if (p.motto !== undefined) {
-      t.motto = str(p, "motto", { max: MOTTO_MAX, optional: true, label: "the motto" });
-      changes.push("motto");
     }
     if (p.colour !== undefined) {
       if (!(TEAM_COLOURS as readonly string[]).includes(p.colour as string)) throw new UserError("Pick one of the team colours.");
@@ -464,12 +453,19 @@ const host: Record<string, Handler> = {
     return { audit: ["team.update", `Team ${t.order + 1}: ${changes.join(", ")}`] };
   },
 
+  /** Clears a team's name and lets them type a new one. */
+  "team.rejectName": (s, _a, p) => {
+    const t = findTeam(s, p.teamId);
+    if (!t.name) throw new UserError("That team hasn't got a name yet.");
+    const old = t.name;
+    t.name = null;
+    t.canRename = true;
+    return { audit: ["team.rejectName", `Rejected "${old}"`] };
+  },
+
   "naming.start": (s, _a, _p, now) => {
     requireComplete(s);
     if (s.naming.phase === "open") throw new UserError("Team naming is already open.");
-    for (const t of s.teams) {
-      if (!t.name && t.suggestions.length === 0) t.suggestions = freshSuggestions(s, 3);
-    }
     const deadline = now + NAMING_MS;
     s.naming = { phase: "open", deadline };
     return { alarmAt: deadline, audit: ["naming.start", "Team naming opened for 2 minutes"] };
@@ -543,35 +539,14 @@ const player: Record<string, Handler> = {
     return {};
   },
 
-  "team.pick": (s, actor, p) => {
-    if (s.naming.phase !== "open") throw new UserError("Team naming isn't open.");
+  /** A team types (or changes) its own name while naming is open. */
+  "team.name": (s, actor, p) => {
     const t = playerTeam(s, actor);
-    if (t.name) throw new UserError(`Your team is already ${t.name}.`);
-    const name = str(p, "name", { label: "a team name" });
-    if (!t.suggestions.includes(name)) throw new UserError("Pick one of your team's suggestions.");
+    if (s.naming.phase !== "open" && !t.canRename) throw new UserError("Team naming has closed. Ask the host to change your name.");
+    const name = teamName(s, p.name, t.id);
     t.name = name;
-    const allNamed = s.teams.every((x) => x.name);
-    if (allNamed) {
-      closeNamingNow(s);
-      return { alarmAt: null, audit: ["team.pick", `${name} (all teams named)`] };
-    }
-    return { audit: ["team.pick", name] };
-  },
-
-  "team.reroll": (s, actor) => {
-    if (s.naming.phase !== "open") throw new UserError("Team naming isn't open.");
-    const t = playerTeam(s, actor);
-    if (t.name) throw new UserError("Your team has already chosen a name.");
-    if (t.rerollUsed) throw new UserError("Your team has already used its reroll.");
-    t.suggestions = freshSuggestions(s, 3);
-    t.rerollUsed = true;
-    return { audit: ["team.reroll", `Team ${t.order + 1}`] };
-  },
-
-  "team.motto": (s, actor, p) => {
-    const t = playerTeam(s, actor);
-    t.motto = str(p, "motto", { max: MOTTO_MAX, optional: true, label: "the motto" });
-    return {};
+    t.canRename = false;
+    return { audit: ["team.name", `Team ${t.order + 1} is now ${name}`] };
   },
   ...quizPlayer,
 };

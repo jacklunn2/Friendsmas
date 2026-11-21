@@ -37,11 +37,10 @@ export interface ServerTeam {
   colour: string;
   badge: string;
   name: string | null;
-  motto: string;
   /** In reveal order. */
   memberIds: string[];
-  suggestions: string[];
-  rerollUsed: boolean;
+  /** Set when the host rejects a name, so the team may type a new one even after naming closes. */
+  canRename?: boolean;
 }
 
 export interface RevealEvent {
@@ -161,8 +160,6 @@ export interface ServerState {
   naming: { phase: NamingPhase; deadline: number | null };
   intermission: boolean;
   hostTokens: { token: string; createdAt: number }[];
-  /** Every team name offered so far, so suggestions never repeat. */
-  offeredNames: string[];
   nextId: number;
   activities: Activity[];
   ledger: LedgerEntry[];
@@ -187,6 +184,14 @@ export function migrate(s: ServerState): ServerState {
   s.blackout ??= false;
   s.stage ??= freshStage();
   s.quiz ??= freshQuiz();
+  // Block 4: teams type their own names; suggestions and mottos are gone.
+  delete (s as { offeredNames?: unknown }).offeredNames;
+  for (const t of s.teams) {
+    const old = t as ServerTeam & { motto?: unknown; suggestions?: unknown; rerollUsed?: unknown };
+    delete old.motto;
+    delete old.suggestions;
+    delete old.rerollUsed;
+  }
   for (const a of s.activities) {
     a.format ??= "live";
     a.speedBonus ??= 0;
@@ -212,7 +217,6 @@ export function freshState(now: number): ServerState {
     naming: { phase: "idle", deadline: null },
     intermission: false,
     hostTokens: [],
-    offeredNames: [],
     nextId: 1,
     activities: [],
     ledger: [],
