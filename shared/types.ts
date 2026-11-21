@@ -642,6 +642,10 @@ export interface ClientRequest {
 // ---------------------------------------------------------------------------
 // Constants shared by both sides
 
+/** The day of the event (local date). Before it, phones say "you're all set, see you on the day". */
+export const EVENT_DATE = "2026-12-19";
+export const EVENT_DATE_LABEL = "Saturday 19 December";
+
 export const SPIN_MS = 8000;
 export const FINAL_REVEAL_MS = 5600;
 export const NAMING_MS = 120_000;

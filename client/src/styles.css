@@ -4651,3 +4651,36 @@ img.member__emoji {
   max-width: 20rem;
 }
 .house-pad__go { justify-self: start; }
+
+/* Phone: all set */
+.all-set {
+  text-align: center;
+  justify-items: center;
+}
+.all-set__icon {
+  font-size: 3rem;
+  margin: 0;
+}
+.all-set__card {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  text-align: left;
+  background: var(--pine);
+  border: 1px solid var(--spruce-line);
+  border-radius: 14px;
+  padding: 0.7rem 0.9rem;
+  width: 100%;
+}
+.all-set__card p {
+  margin: 0;
+}
+.all-set__photo {
+  width: 3.6rem;
+  height: 3.6rem;
+  font-size: 2rem;
+  border-radius: 50%;
+  background: var(--spruce);
+  box-shadow: 0 0 0 2px var(--brass);
+  flex: none;
+}

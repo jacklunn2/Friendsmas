@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
+  EVENT_DATE,
+  EVENT_DATE_LABEL,
   FINAL_REVEAL_MS,
   TEAM_NAME_MAX,
   NAME_MAX,
@@ -57,16 +59,7 @@ export function PlayerApp({ code }: { code: string }) {
         {!view.me ? (
           <Join view={view} send={send} />
         ) : view.me.status === "pending" ? (
-          <>
-            <Waiting title={`Hi ${view.me.name}`} body="The host will let you in shortly. Keep this page open." />
-            {view.myQuestionnaire ? (
-              <section className="phone__card">
-                <PhotoStep me={view.me} getToken={tokenStore.get} send={send} />
-              </section>
-            ) : (
-              <QuestionnaireForm name={view.me.name} existing={null} send={send} />
-            )}
-          </>
+          <Prep view={view} send={send} getToken={tokenStore.get} code={code} pending />
         ) : (
           <>
             <InGame view={view} send={send} serverNow={serverNow} getToken={tokenStore.get} code={code} />
@@ -241,6 +234,101 @@ function Join({ view, send }: { view: PlayerView; send: Send }) {
 }
 
 // ---------------------------------------------------------------------------
+// Before the day: questionnaire, photo, then "you're all set"
+
+/** True until the morning of the event, in the guest's own time zone. */
+function beforeEventDay(): boolean {
+  const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
+  return today < EVENT_DATE;
+}
+
+/** "Skip for now" on the photo step, remembered on this phone. */
+function usePhotoSkip(code: string): [boolean, () => void] {
+  const store = useMemo(() => storage(`fm.photoSkipped.${code}`), [code]);
+  const [skipped, setSkipped] = useState(() => store.get() === "1");
+  return [
+    skipped,
+    () => {
+      store.set("1");
+      setSkipped(true);
+    },
+  ];
+}
+
+/** For guests waiting for the host to let them in: the same questionnaire → photo → thank you. */
+function Prep({ view, send, getToken, code, pending }: { view: PlayerView; send: Send; getToken: () => string | null; code: string; pending?: boolean }) {
+  const me = view.me!;
+  const [skipped, skip] = usePhotoSkip(code);
+  const [questOpen, setQuestOpen] = useState(false);
+  const [photoOpen, setPhotoOpen] = useState(false);
+  if (questOpen || !view.myQuestionnaire) {
+    return <QuestionnaireForm name={me.name} existing={view.myQuestionnaire} send={send} onDone={() => setQuestOpen(false)} />;
+  }
+  if (photoOpen || (!me.photo && !skipped)) {
+    return (
+      <section className="phone__card">
+        <PhotoStep
+          me={me}
+          getToken={getToken}
+          send={send}
+          intro={!me.photo && !skipped}
+          onDone={() => {
+            skip();
+            setPhotoOpen(false);
+          }}
+        />
+      </section>
+    );
+  }
+  return <AllSet view={view} pending={pending} onAnswers={() => setQuestOpen(true)} onPhoto={() => setPhotoOpen(true)} />;
+}
+
+function AllSet({ view, pending, onAnswers, onPhoto }: { view: PlayerView; pending?: boolean; onAnswers: () => void; onPhoto: () => void }) {
+  const me = view.me!;
+  const q = view.myQuestionnaire;
+  const early = beforeEventDay();
+  return (
+    <section className="phone__card all-set">
+      <p className="all-set__icon" aria-hidden>
+        🎄
+      </p>
+      <h1 className="phone__title">Thank you, {me.name}!</h1>
+      <p>Your answers are in.</p>
+      <div className="all-set__card">
+        <Avatar player={me} className="all-set__photo" />
+        <div>
+          {q && (
+            <p>
+              Bringing <strong>{q.dish}</strong> <span className="phone__muted">({q.category === "other" ? "other" : q.category === "drinks" ? "drinks" : q.category})</span>
+            </p>
+          )}
+          <p className="phone__muted">
+            {q?.facts.length ?? 0} secret {q?.facts.length === 1 ? "fact" : "facts"} · {me.photo ? "photo added" : "no photo yet"}
+          </p>
+        </div>
+      </div>
+      {pending && <p>Your name wasn't on the guest list, so the host will confirm your spot. Nothing else to do.</p>}
+      {early ? (
+        <p>
+          <strong>You can close this page.</strong> See you on {EVENT_DATE_LABEL}! On the day, open this same link on this phone, or scan the QR code on the TV,
+          and you'll go straight in.
+        </p>
+      ) : (
+        <p>{pending ? "Hang tight: the host will let you in shortly." : "You're all set. Keep this page open and watch the TV."}</p>
+      )}
+      <div className="phone__links">
+        <button className="btn btn--ghost btn--small" onClick={onAnswers}>
+          Change my answers
+        </button>
+        <button className="btn btn--ghost btn--small" onClick={onPhoto}>
+          {me.photo ? "Change my photo" : "Add my photo"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // In the game
 
 interface InGameProps {
@@ -254,8 +342,7 @@ interface InGameProps {
 function InGame({ view, send, serverNow, getToken, code }: InGameProps) {
   const me = view.me!;
   // Guests are asked for a photo straight after joining; "Skip for now" is remembered.
-  const skipStore = useMemo(() => storage(`fm.photoSkipped.${code}`), [code]);
-  const [skipped, setSkipped] = useState(() => skipStore.get() === "1");
+  const [skipped, skip] = usePhotoSkip(code);
   const [photoOpen, setPhotoOpen] = useState(false);
   const photoPanel = (intro: boolean) => (
     <section className="phone__card">
@@ -265,8 +352,7 @@ function InGame({ view, send, serverNow, getToken, code }: InGameProps) {
         send={send}
         intro={intro}
         onDone={() => {
-          skipStore.set("1");
-          setSkipped(true);
+          skip();
           setPhotoOpen(false);
         }}
       />
@@ -333,6 +419,10 @@ function InGame({ view, send, serverNow, getToken, code }: InGameProps) {
 
   if (phase === "draft") {
     if ((!me.photo && !skipped) || photoOpen) return photoPanel(!me.photo && !skipped);
+    // Before the day, there's nothing to wait for: thank them and let them go.
+    if (beforeEventDay()) {
+      return <AllSet view={view} onAnswers={() => setQuestOpen(true)} onPhoto={() => setPhotoOpen(true)} />;
+    }
     const joined = view.players.filter((p) => p.status === "joined");
     return (
       <section className="phone__card">
