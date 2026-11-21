@@ -213,13 +213,14 @@ export class EventRoom extends DurableObject<Env> {
 
   /** Starts an upload: checks the size and type, and returns an id to send chunks to. */
   private async beginVideo(request: Request): Promise<Response> {
-    if (!this.isHost(request)) return Response.json({ error: "Sign in to the control room again." }, { status: 401 });
+    // Always read the body before replying, even to refuse it.
     let body: { name?: unknown; type?: unknown; size?: unknown; durationMs?: unknown } = {};
     try {
       body = await request.json();
     } catch {
       // checked below
     }
+    if (!this.isHost(request)) return Response.json({ error: "Sign in to the control room again." }, { status: 401 });
     const size = Number(body.size);
     const type = typeof body.type === "string" ? body.type : "";
     try {
@@ -258,11 +259,11 @@ export class EventRoom extends DurableObject<Env> {
   }
 
   private async videoChunk(request: Request, id: string, idx: number): Promise<Response> {
+    const data = await request.arrayBuffer();
     if (!this.isHost(request)) return Response.json({ error: "Sign in to the control room again." }, { status: 401 });
     const row = this.videoRow(id);
     if (!row || row.complete) return Response.json({ error: "That upload has expired. Start again." }, { status: 404 });
     if (!Number.isInteger(idx) || idx < 0 || idx >= row.chunks) return Response.json({ error: "Unexpected part of the video." }, { status: 400 });
-    const data = await request.arrayBuffer();
     const expected = idx === row.chunks - 1 ? row.size - idx * VIDEO_CHUNK_BYTES : VIDEO_CHUNK_BYTES;
     if (data.byteLength !== expected) return Response.json({ error: "Part of the video went missing. Try again." }, { status: 400 });
     this.ctx.storage.sql.exec("INSERT OR REPLACE INTO video_chunks (video_id, idx, data) VALUES (?, ?, ?)", id, idx, data);
@@ -271,6 +272,7 @@ export class EventRoom extends DurableObject<Env> {
 
   /** Checks every chunk arrived, then adds the clip to the event. */
   private async finishVideo(request: Request, id: string): Promise<Response> {
+    await request.arrayBuffer();
     if (!this.isHost(request)) return Response.json({ error: "Sign in to the control room again." }, { status: 401 });
     const row = this.videoRow(id);
     if (!row) return Response.json({ error: "That upload has expired. Start again." }, { status: 404 });
