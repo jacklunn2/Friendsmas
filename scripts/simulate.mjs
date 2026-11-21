@@ -139,6 +139,29 @@ async function main() {
   phones.Kat = kat;
   check(true, "host lets a new nickname in");
 
+  // --- Block 4: the questionnaire (food and secret facts)
+  const dishes = [
+    ["Roast turkey", "main"], ["Nut roast", "main"], ["Roast potatoes", "side"], ["Pigs in blankets", "side"],
+    ["Trifle", "dessert"], ["The trifle", "dessert"], ["Mince pies", "dessert"], ["Mulled wine", "drinks"],
+    ["Eggnog", "drinks"], ["Cheese board", "other"], ["Sprouts", "side"],
+  ];
+  const facts = {};
+  for (const [i, [name, c]] of Object.entries(phones).entries()) {
+    const [dish, category] = dishes[i];
+    facts[name] = [`${name}'s secret: once rehearsed a fact ${i}`];
+    await c.req("player.answers", { dish, category, dietary: i === 1 ? "Vegan" : "", facts: facts[name] });
+  }
+  await host.until((v) => Object.keys(v.questionnaires).length === 11);
+  check(true, "every phone filled in the questionnaire");
+  await stage.until((v) => v.menu.length === 11);
+  check(stage.view.menu.some((m) => m.dish === "Nut roast" && m.dietary === "Vegan"), "the TV gets the menu with dietary notes");
+  const leaked = JSON.stringify([stage.view, ...Object.values(phones).map((c) => ({ ...c.view, myQuestionnaire: null }))]);
+  check(!leaked.includes("secret: once rehearsed"), "secret facts never reach the TV or other phones");
+  check(phones.Ava.view.myQuestionnaire?.facts[0].text === facts.Ava[0], "a guest sees their own facts");
+  check(host.view.foodWarnings.some((w) => w.kind === "duplicate" && /Trifle/.test(w.message)), "the control room warns about two trifles");
+  const badAnswers = await phones.Ava.req("player.answers", { dish: "Trifle", category: "pudding", facts: ["x"] }).catch((e) => e.message);
+  check(/kind of dish/.test(badAnswers), "a made-up dish category is refused");
+
   // --- Odd number: 11 joined
   const lockErr = await host.req("draw.lock").catch((e) => e.message);
   check(/odd number/.test(lockErr), "locking 11 guests needs an odd-number choice");
@@ -213,8 +236,8 @@ async function main() {
   const reps = [...teamsByPhone.values()];
   const typedNames = ["Rehearsal Reindeer", "Tinsel Trouble", "The Sprouts", "Pudding Club", "Bauble Heads", "Last Team"];
   for (let i = 0; i < reps.length; i++) await reps[i].req("team.name", { name: typedNames[i] });
-  const dupe = await reps[1].req("team.name", { name: "rehearsal reindeer" }).catch((e) => e.message);
-  check(/Another team/.test(dupe), "two teams can't have the same name");
+  const dupeName = await reps[1].req("team.name", { name: "rehearsal reindeer" }).catch((e) => e.message);
+  check(/Another team/.test(dupeName), "two teams can't have the same name");
   await host.req("naming.close");
   await stage.until((v) => v.naming.phase === "closed");
   check(stage.view.teams.every((t) => t.name), "every team typed a name");

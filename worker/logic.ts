@@ -24,6 +24,7 @@ import {
   type Payload,
 } from "./common";
 import { pick, randomDigits, randomToken, shuffle } from "./random";
+import { guestsHost, guestsPlayer } from "./guests";
 import { quizAlarm, quizHost, quizPlayer } from "./quiz";
 import { scoringHost } from "./scoring";
 import { freshDraw, freshQuiz, freshStage, newId, type RevealEvent, type ServerPlayer, type ServerState, type ServerTeam } from "./state";
@@ -483,6 +484,7 @@ const host: Record<string, Handler> = {
   },
   ...scoringHost,
   ...quizHost,
+  ...guestsHost,
 };
 
 const player: Record<string, Handler> = {
@@ -549,6 +551,7 @@ const player: Record<string, Handler> = {
     return { audit: ["team.name", `Team ${t.order + 1} is now ${name}`] };
   },
   ...quizPlayer,
+  ...guestsPlayer,
 };
 
 /** Runs one client request against the state. Mutates `s` in place. */

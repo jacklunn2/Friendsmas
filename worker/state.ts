@@ -1,5 +1,6 @@
 import type {
   ActivityFormat,
+  DishCategory,
   ActivityKind,
   QuestionType,
   QuizPhase,
@@ -29,6 +30,18 @@ export interface ServerPlayer {
   createdAt: number;
   /** Photo version (bumped on each upload), or null. The image lives in the photos table. */
   photo?: number | null;
+  /** Questionnaire answers, once submitted. */
+  answers?: Questionnaire | null;
+}
+
+export interface Questionnaire {
+  dish: string;
+  category: DishCategory;
+  dietary: string;
+  /** Secret facts for "Who wrote this?". Host-only. */
+  facts: { id: string; text: string }[];
+  completedAt: number;
+  updatedAt: number;
 }
 
 export interface ServerTeam {

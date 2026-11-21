@@ -13,6 +13,7 @@ import {
 } from "../../../shared/types";
 import { revealDurationMs } from "../timing";
 import { PhoneQuiz } from "./PhoneQuiz";
+import { QuestionnaireForm } from "./Questionnaire";
 import { storage, useRoom, useTicker } from "../net";
 import { prepareSelfie, uploadSelfie } from "../photo";
 import { Avatar, AvatarPicker, ConnectionBanner, EventCodeContext, formatClock, playerMap, TeamCard, teamStyle, Wordmark } from "../ui";
@@ -56,9 +57,13 @@ export function PlayerApp({ code }: { code: string }) {
         ) : view.me.status === "pending" ? (
           <>
             <Waiting title={`Hi ${view.me.name}`} body="The host will let you in shortly. Keep this page open." />
-            <section className="phone__card">
-              <PhotoStep me={view.me} getToken={tokenStore.get} send={send} />
-            </section>
+            {view.myQuestionnaire ? (
+              <section className="phone__card">
+                <PhotoStep me={view.me} getToken={tokenStore.get} send={send} />
+              </section>
+            ) : (
+              <QuestionnaireForm name={view.me.name} existing={null} send={send} />
+            )}
           </>
         ) : (
           <InGame view={view} send={send} serverNow={serverNow} getToken={tokenStore.get} code={code} />
@@ -262,10 +267,16 @@ function InGame({ view, send, serverNow, getToken, code }: InGameProps) {
       />
     </section>
   );
+  const [questOpen, setQuestOpen] = useState(false);
   const photoButton = (
-    <button className="btn btn--ghost btn--small photo-link" onClick={() => setPhotoOpen(true)}>
-      {me.photo ? "Change your photo" : "Add your photo"}
-    </button>
+    <div className="phone__links">
+      <button className="btn btn--ghost btn--small photo-link" onClick={() => setPhotoOpen(true)}>
+        {me.photo ? "Change your photo" : "Add your photo"}
+      </button>
+      <button className="btn btn--ghost btn--small photo-link" onClick={() => setQuestOpen(true)}>
+        {view.myQuestionnaire ? "Your food and facts" : "Answer the questions"}
+      </button>
+    </div>
   );
   const players = useMemo(() => playerMap(view.players), [view.players]);
 
@@ -298,6 +309,20 @@ function InGame({ view, send, serverNow, getToken, code }: InGameProps) {
   }, [holding, me.teamId]);
 
   const { phase, hidden } = view.draw;
+
+  // Guests who haven't done the questionnaire are asked to finish it first,
+  // unless the draw or a quiz is happening right now.
+  const busyMoment = phase === "locked" || phase === "revealing" || holding || (phase === "complete" && view.stage.screen === "quiz");
+  if (questOpen || (!view.myQuestionnaire && !busyMoment)) {
+    return (
+      <QuestionnaireForm
+        name={me.name}
+        existing={view.myQuestionnaire}
+        send={send}
+        onDone={() => setQuestOpen(false)}
+      />
+    );
+  }
 
   if (view.intermission) return <Waiting title="Short break" body="We'll be back in a moment." />;
 

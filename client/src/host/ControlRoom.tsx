@@ -11,6 +11,7 @@ import {
 } from "../../../shared/types";
 import { useTicker, type ConnStatus } from "../net";
 import { Avatar, ConnectionBanner, EventCodeContext, formatClock, teamStyle, Wordmark } from "../ui";
+import { QuestionnairePanel } from "./Questionnaire";
 import { ScoringPanel, type Notify, type Run } from "./Scoring";
 
 type Send = <T = unknown>(action: string, payload?: Record<string, unknown>) => Promise<T>;
@@ -71,6 +72,10 @@ export function ControlRoom({ view, status, send, serverNow }: Props) {
         {drafting ? <DrawSetup view={view} run={run} /> : <TeamsPanel view={view} run={run} />}
       </div>
       {drafting && <ScoringPanel view={view} run={run} notify={notify} serverNow={serverNow} />}
+      <section className="prep" aria-label="Guests and extras">
+        <h2 className="prep__title">Guests and extras</h2>
+        <QuestionnairePanel view={view} run={run} />
+      </section>
       <footer className="host__footer">
         <ActivityLog view={view} />
         <StartFresh run={run} />

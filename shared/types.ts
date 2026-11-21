@@ -241,6 +241,8 @@ export interface MyTeamView extends PublicTeam {
 export interface PlayerView extends PublicView {
   role: "player";
   me: PublicPlayer | null;
+  /** This guest's own questionnaire answers, or null if they haven't done it. */
+  myQuestionnaire: QuestionnaireView | null;
   myTeam: MyTeamView | null;
   /** This guest's share of their team's points at the last reveal. */
   myPoints: number;
@@ -250,8 +252,58 @@ export interface PlayerView extends PublicView {
   claimable: { id: string; name: string }[];
 }
 
+// ---------------------------------------------------------------------------
+// Guest questionnaire (Block 4)
+
+export type DishCategory = "main" | "side" | "dessert" | "drinks" | "other";
+export const DISH_CATEGORIES: readonly DishCategory[] = ["main", "side", "dessert", "drinks", "other"];
+export const DISH_CATEGORY_LABEL: Record<DishCategory, string> = {
+  main: "Mains",
+  side: "Sides",
+  dessert: "Desserts",
+  drinks: "Drinks",
+  other: "Other",
+};
+/** Categories the food list warns about when nobody is bringing one. */
+export const EXPECTED_CATEGORIES: readonly DishCategory[] = ["main", "side", "dessert", "drinks"];
+export const DISH_MAX = 60;
+export const DIETARY_MAX = 120;
+export const FACT_MAX = 200;
+export const MAX_FACTS = 3;
+
+export interface SecretFact {
+  id: string;
+  text: string;
+}
+
+/** A guest's answers. Facts only ever go to the host and to the guest who wrote them. */
+export interface QuestionnaireView {
+  dish: string;
+  category: DishCategory;
+  dietary: string;
+  facts: SecretFact[];
+  completedAt: number;
+}
+
+/** One dish on the TV's welcome menu. */
+export interface MenuItem {
+  playerId: string;
+  dish: string;
+  category: DishCategory;
+  dietary: string;
+}
+
+export interface FoodWarning {
+  kind: "duplicate" | "missing";
+  message: string;
+  /** For duplicates: the guests bringing the same thing. */
+  playerIds: string[];
+}
+
 export interface StageView extends PublicView {
   role: "stage";
+  /** The food everyone is bringing, for the welcome screen. */
+  menu: MenuItem[];
   /** True when this stage was opened from a signed-in control room, so clicking the wheel spins it. */
   canSpin: boolean;
 }
@@ -304,6 +356,9 @@ export interface HostView extends PublicView {
   quizAnswers: HostQuizAnswer[];
   /** Ids of questions already revealed, by activity. */
   revealedQuestions: Record<string, string[]>;
+  /** Every guest's questionnaire answers, by guest id. Missing = not done yet. */
+  questionnaires: Record<string, QuestionnaireView>;
+  foodWarnings: FoodWarning[];
 }
 
 export type AnyView = PlayerView | StageView | HostView;
