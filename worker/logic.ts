@@ -491,6 +491,11 @@ const host: Record<string, Handler> = {
     return { alarmAt: null, audit: ["naming.close", "Team naming closed"] };
   },
 
+  "guest.openJoin": (s, _a, p) => {
+    s.openJoin = p.on === true;
+    return { audit: ["guest.openJoin", s.openJoin ? "Guests can join with their own nickname" : "New nicknames need the host's approval"] };
+  },
+
   "stage.intermission": (s, _a, p) => {
     s.intermission = p.on === true;
     return { audit: ["stage.intermission", s.intermission ? "On" : "Off"] };
@@ -522,13 +527,16 @@ const player: Record<string, Handler> = {
   "player.joinNew": (s, actor, p, now) => {
     if (actor.playerId) throw new UserError("This phone has already joined.");
     const name = cleanName(p.name);
-    if (nameTaken(s, name)) throw new UserError(`${name} is already on the guest list. Tap your name instead.`);
+    if (nameTaken(s, name)) throw new UserError(`Someone is already called ${name}. If that's you, go back and tap your name; otherwise try another nickname.`);
+    // With open joining, a typed nickname is in straight away; otherwise it waits for the host.
+    const open = s.openJoin;
     const pl: ServerPlayer = {
-      id: newId(s, "p"), name, emoji: avatar(p.emoji), status: "pending", teamId: null, isTest: false,
-      token: randomToken(), joinedAt: null, rejoinCode: null, rejoinExpires: null, createdAt: now,
+      id: newId(s, "p"), name, emoji: avatar(p.emoji), status: open ? "joined" : "pending", teamId: null, isTest: false,
+      token: randomToken(), joinedAt: open ? now : null, rejoinCode: null, rejoinExpires: null, createdAt: now,
     };
     s.players.push(pl);
-    return { welcome: { token: pl.token!, playerId: pl.id }, audit: ["player.joinNew", `${name} asked to join`] };
+    if (open) autoAssignMission(s, pl, now);
+    return { welcome: { token: pl.token!, playerId: pl.id }, audit: ["player.joinNew", open ? `${name} joined` : `${name} asked to join`] };
   },
 
   "player.rejoin": (s, actor, p, now) => {
@@ -545,6 +553,18 @@ const player: Record<string, Handler> = {
     }
     autoAssignMission(s, pl, now);
     return { welcome: { token: pl.token, playerId: pl.id }, audit: ["player.rejoin", `${pl.name} rejoined on a new phone`] };
+  },
+
+  /** A guest changes the name everyone sees. */
+  "player.rename": (s, actor, p) => {
+    if (!actor.playerId) throw new UserError("Join the event first.");
+    const me = findPlayer(s, actor.playerId);
+    const name = cleanName(p.name);
+    if (name === me.name) return { noChange: true };
+    if (nameTaken(s, name, me.id)) throw new UserError(`Someone is already called ${name}. Try another nickname.`);
+    const old = me.name;
+    me.name = name;
+    return { audit: ["player.rename", `${old} is now ${name}`] };
   },
 
   "player.removePhoto": (s, actor) => {

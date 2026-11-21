@@ -135,19 +135,21 @@ function Join({ view, send }: { view: PlayerView; send: Send }) {
           <h1 className="phone__title">Hi {chosen.name}! Pick your avatar</h1>
         ) : (
           <>
-            <h1 className="phone__title">Join with a nickname</h1>
+            <h1 className="phone__title">{view.claimable.length ? "Join with your own nickname" : "What should we call you?"}</h1>
             <label className="field">
-              <span className="field__label">Your name</span>
+              <span className="field__label">Your nickname</span>
               <input
                 className="input"
                 value={name}
                 maxLength={NAME_MAX}
-                autoComplete="given-name"
+                autoComplete="nickname"
                 onChange={(e) => setName(e.target.value)}
                 required
               />
             </label>
-            <p className="phone__muted">The host will approve you before you appear.</p>
+            <p className="phone__muted">
+              {view.openJoin ? "This is the name everyone sees. You can change it later." : "The host will approve you before you appear."}
+            </p>
             <span className="field__label">Your avatar</span>
           </>
         )}
@@ -219,11 +221,11 @@ function Join({ view, send }: { view: PlayerView; send: Send }) {
           ))}
         </ul>
       ) : (
-        <p>Everyone on the guest list has joined.</p>
+        <p>No names to pick from yet. Join with your own nickname.</p>
       )}
       <div className="phone__alt">
         <button className="btn btn--ghost" onClick={() => setMode("new")}>
-          I'm not on the list
+          {view.claimable.length ? "I'm not on the list" : "Join with a nickname"}
         </button>
         <button className="btn btn--ghost" onClick={() => setMode("code")}>
           I have a rejoin code
@@ -261,6 +263,8 @@ function Prep({ view, send, getToken, code, pending }: { view: PlayerView; send:
   const [skipped, skip] = usePhotoSkip(code);
   const [questOpen, setQuestOpen] = useState(false);
   const [photoOpen, setPhotoOpen] = useState(false);
+  const [nameOpen, setNameOpen] = useState(false);
+  if (nameOpen) return <NameForm me={me} send={send} onDone={() => setNameOpen(false)} />;
   if (questOpen || !view.myQuestionnaire) {
     return <QuestionnaireForm name={me.name} existing={view.myQuestionnaire} send={send} onDone={() => setQuestOpen(false)} />;
   }
@@ -280,10 +284,49 @@ function Prep({ view, send, getToken, code, pending }: { view: PlayerView; send:
       </section>
     );
   }
-  return <AllSet view={view} pending={pending} onAnswers={() => setQuestOpen(true)} onPhoto={() => setPhotoOpen(true)} />;
+  return <AllSet view={view} pending={pending} onAnswers={() => setQuestOpen(true)} onPhoto={() => setPhotoOpen(true)} onName={() => setNameOpen(true)} />;
 }
 
-function AllSet({ view, pending, onAnswers, onPhoto }: { view: PlayerView; pending?: boolean; onAnswers: () => void; onPhoto: () => void }) {
+/** A guest changes the name everyone sees. */
+function NameForm({ me, send, onDone }: { me: PublicPlayer; send: Send; onDone: () => void }) {
+  const [name, setName] = useState(me.name);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <form
+      className="phone__card"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        setError(null);
+        try {
+          await send("player.rename", { name });
+          onDone();
+        } catch (err) {
+          setError((err as Error).message);
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <h1 className="phone__title">Your nickname</h1>
+      <p className="phone__muted">This is the name everyone sees: on the TV, the wheel and the leaderboard.</p>
+      <label className="field">
+        <span className="field__label">Nickname</span>
+        <input className="input" value={name} maxLength={NAME_MAX} onChange={(e) => setName(e.target.value)} required autoFocus />
+      </label>
+      <ErrorText error={error} />
+      <button className="btn btn--primary btn--block" disabled={busy || !name.trim()}>
+        {busy ? "Saving…" : "Save"}
+      </button>
+      <button type="button" className="btn btn--ghost btn--block" onClick={onDone}>
+        Cancel
+      </button>
+    </form>
+  );
+}
+
+function AllSet({ view, pending, onAnswers, onPhoto, onName }: { view: PlayerView; pending?: boolean; onAnswers: () => void; onPhoto: () => void; onName: () => void }) {
   const me = view.me!;
   const q = view.myQuestionnaire;
   const early = beforeEventDay();
@@ -307,7 +350,7 @@ function AllSet({ view, pending, onAnswers, onPhoto }: { view: PlayerView; pendi
           </p>
         </div>
       </div>
-      {pending && <p>Your name wasn't on the guest list, so the host will confirm your spot. Nothing else to do.</p>}
+      {pending && <p>The host will confirm your spot. Nothing else to do.</p>}
       {early ? (
         <p>
           <strong>You can close this page.</strong> See you on {EVENT_DATE_LABEL}! On the day, open this same link on this phone, or scan the QR code on the TV,
@@ -317,6 +360,9 @@ function AllSet({ view, pending, onAnswers, onPhoto }: { view: PlayerView; pendi
         <p>{pending ? "Hang tight: the host will let you in shortly." : "You're all set. Keep this page open and watch the TV."}</p>
       )}
       <div className="phone__links">
+        <button className="btn btn--ghost btn--small" onClick={onName}>
+          Change my nickname
+        </button>
         <button className="btn btn--ghost btn--small" onClick={onAnswers}>
           Change my answers
         </button>
@@ -359,8 +405,12 @@ function InGame({ view, send, serverNow, getToken, code }: InGameProps) {
     </section>
   );
   const [questOpen, setQuestOpen] = useState(false);
+  const [nameOpen, setNameOpen] = useState(false);
   const photoButton = (
     <div className="phone__links">
+      <button className="btn btn--ghost btn--small photo-link" onClick={() => setNameOpen(true)}>
+        Change your nickname
+      </button>
       <button className="btn btn--ghost btn--small photo-link" onClick={() => setPhotoOpen(true)}>
         {me.photo ? "Change your photo" : "Add your photo"}
       </button>
@@ -404,6 +454,7 @@ function InGame({ view, send, serverNow, getToken, code }: InGameProps) {
   // Guests who haven't done the questionnaire are asked to finish it first,
   // unless the draw or a quiz is happening right now.
   const busyMoment = phase === "locked" || phase === "revealing" || holding || (phase === "complete" && (view.stage.screen === "quiz" || view.stage.screen === "poll"));
+  if (nameOpen) return <NameForm me={me} send={send} onDone={() => setNameOpen(false)} />;
   if (questOpen || (!view.myQuestionnaire && !busyMoment)) {
     return (
       <QuestionnaireForm
@@ -421,7 +472,7 @@ function InGame({ view, send, serverNow, getToken, code }: InGameProps) {
     if ((!me.photo && !skipped) || photoOpen) return photoPanel(!me.photo && !skipped);
     // Before the day, there's nothing to wait for: thank them and let them go.
     if (beforeEventDay()) {
-      return <AllSet view={view} onAnswers={() => setQuestOpen(true)} onPhoto={() => setPhotoOpen(true)} />;
+      return <AllSet view={view} onAnswers={() => setQuestOpen(true)} onPhoto={() => setPhotoOpen(true)} onName={() => setNameOpen(true)} />;
     }
     const joined = view.players.filter((p) => p.status === "joined");
     return (

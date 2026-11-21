@@ -243,6 +243,8 @@ export interface PublicView {
   quiz: QuizView | null;
   /** The poll on the TV, if any. */
   poll: PollView | null;
+  /** True: guests can type their own nickname and join straight away, without the host's approval. */
+  openJoin: boolean;
   /** The day's running order, written by the host, for the welcome screen. */
   agenda: AgendaItem[];
   prize: PrizeView;

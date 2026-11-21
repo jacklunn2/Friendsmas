@@ -106,6 +106,7 @@ function base(s: ServerState, viewer: Viewer, now: number): PublicView {
     results: resultsView(s),
     quiz: quizView(s, true),
     poll: pollView(s),
+    openJoin: s.openJoin,
     agenda: s.agenda.map((a) => ({ ...a })),
     video: s.video ? { ...s.video } : null,
     houseReveal: houseRevealView(s),

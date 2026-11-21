@@ -154,8 +154,19 @@ describe("joining", () => {
     expect(() => runAction(s, { role: "player", playerId: null }, "player.rejoin", { code }, T0 + 2000)).toThrow();
   });
 
-  it("holds new nicknames for approval", () => {
+  it("lets guests join with their own nickname, or holds new names for approval if the host prefers", () => {
+    const open = freshState(T0);
+    runAction(open, { role: "player", playerId: null }, "player.joinNew", { name: "Jacka", emoji: "🐨" }, T0);
+    expect(open.players[0].status).toBe("joined");
+    expect(stageView(open, T0).players.map((p) => p.name)).toEqual(["Jacka"]);
+    const me: Actor = { role: "player", playerId: open.players[0].id };
+    runAction(open, { role: "player", playerId: null }, "player.joinNew", { name: "Bec", emoji: "🐨" }, T0);
+    expect(() => runAction(open, me, "player.rename", { name: "bec" }, T0)).toThrow(/already called/);
+    runAction(open, me, "player.rename", { name: "  Jacko  " }, T0);
+    expect(open.players[0].name).toBe("Jacko");
+
     const s = freshState(T0);
+    runAction(s, HOST, "guest.openJoin", { on: false }, T0);
     const r = runAction(s, { role: "player", playerId: null }, "player.joinNew", { name: "Jo", emoji: "🐨" }, T0);
     expect(s.players[0].status).toBe("pending");
     expect(stageView(s, T0).players).toHaveLength(0);

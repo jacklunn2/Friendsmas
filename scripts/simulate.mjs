@@ -100,6 +100,7 @@ async function main() {
   for (const a of host.view.activities.slice()) await host.req("activity.delete", { id: a.id }).catch(() => {});
   for (const m of host.view.missions.list.filter((x) => x.text.startsWith("Rehearsal mission"))) await host.req("missions.delete", { id: m.id }).catch(() => {});
   await host.req("draw.options", { revealMode: "live", oddFallback: null });
+  await host.req("guest.openJoin", { on: true });
   await host.until((v) => v.roster.length === 0 && v.draw.oddFallback === null && v.activities.length === 0);
 
   const code = host.view.eventCode;
@@ -129,7 +130,8 @@ async function main() {
   const dupeErr = await dupe.req("player.claim", { playerId: avaId, emoji: "🎅" }).catch((e) => e.message);
   check(/already joined/.test(dupeErr), "a name can only be claimed once");
 
-  // A new nickname waits for approval
+  // A new nickname waits for approval when the host has turned open joining off
+  await host.req("guest.openJoin", { on: false });
   const kat = await new Client({ role: "player", code }).open();
   await kat.req("player.joinNew", { name: "Kat", emoji: "🐨" });
   await kat.until((v) => v.me?.status === "pending");
@@ -139,6 +141,13 @@ async function main() {
   await kat.until((v) => v.me?.status === "joined");
   phones.Kat = kat;
   check(true, "host lets a new nickname in");
+  await host.req("guest.openJoin", { on: true });
+  const renamed = await kat.req("player.rename", { name: "Ava" }).catch((e) => e.message);
+  check(/already called/.test(renamed), "a guest can't take someone else's name");
+  await kat.req("player.rename", { name: "Kitty Kat" });
+  await stage.until((v) => v.players.some((p) => p.name === "Kitty Kat"));
+  await kat.req("player.rename", { name: "Kat" });
+  check(true, "a guest changes their own nickname and the TV updates");
 
   // --- Block 4: the questionnaire (food and secret facts)
   const dishes = [

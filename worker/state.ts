@@ -224,6 +224,8 @@ export interface ServerState {
   agenda: AgendaItem[];
   missions: MissionsState;
   prize: PrizeView;
+  /** True: guests can type their own nickname and join straight away. False: new names wait for the host. */
+  openJoin: boolean;
   videos: VideoInfo[];
   video: VideoPlayback | null;
   videoSeq: number;
@@ -279,6 +281,7 @@ export function migrate(s: ServerState): ServerState {
   s.agenda ??= [];
   s.missions ??= freshMissions(s);
   s.prize ??= { trophyImageId: null, pastWinners: [] };
+  s.openJoin ??= true;
   s.videos ??= [];
   s.video ??= null;
   s.videoSeq ??= 0;
@@ -329,6 +332,7 @@ export function freshState(now: number): ServerState {
     agenda: [],
     missions: { list: [], autoOnJoin: false, assigned: {} },
     prize: { trophyImageId: null, pastWinners: [] },
+    openJoin: true,
     videos: [],
     video: null,
     videoSeq: 0,

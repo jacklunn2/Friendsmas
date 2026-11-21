@@ -8,7 +8,7 @@ The full product spec lives in the [Friendsmas Product Spec](https://claude.ai/c
 
 **Block 1: joining, guest list, team draw and team identities**
 
-- **Joining.** Guests open the private link (or scan the QR code on the TV), tap their name and pick an avatar. Unexpected guests can join with a nickname, and the host lets them in. Phones are remembered, and a 4-digit rejoin code moves a guest to a new phone.
+- **Joining.** Guests open the private link (or scan the QR code on the TV), tap their name if you've added it, or type their own nickname, and pick an avatar. By default typed nicknames join straight away; switch off "Guests can join with their own nickname" in the control room to approve each one instead. Guests can change their nickname from their phone at any time. Phones are remembered, and a 4-digit rejoin code moves a guest to a new phone.
 - **Team draw.** The host locks the draw, and the server shuffles everyone into teams with a cryptographically secure random function and saves the result. The wheel on the TV only reveals what was saved, one name per spin, with the last team completed in a final "…which means" moment. Double clicks, a second tab or a refresh can't reroll anything.
 - **Odd numbers.** With an odd number of guests, the host must choose between a team of three and a solo player before locking.
 - **Reveal modes.** In live mode, each phone buzzes when its owner is drawn. In grand-finale mode, phones wait until every team is drawn.

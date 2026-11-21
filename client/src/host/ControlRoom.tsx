@@ -355,6 +355,11 @@ function GuestsPanel({ view, run }: { view: HostView; run: Run }) {
         </span>
       </header>
 
+      <label className="switch">
+        <input type="checkbox" checked={view.openJoin} onChange={(e) => run("guest.openJoin", { on: e.target.checked })} />
+        <span>Guests can join with their own nickname, without waiting for you</span>
+      </label>
+
       {pending.length > 0 && (
         <div className="callout">
           <h3 className="callout__title">Asking to join</h3>
@@ -382,7 +387,13 @@ function GuestsPanel({ view, run }: { view: HostView; run: Run }) {
         {listed.map((p) => (
           <RosterRow key={p.id} player={p} team={p.teamId ? teams.get(p.teamId) : undefined} run={run} />
         ))}
-        {listed.length === 0 && <li className="roster__empty">Add your guest list below. Guests then tap their name on their phones.</li>}
+        {listed.length === 0 && (
+          <li className="roster__empty">
+            {view.openJoin
+              ? "Nobody yet. Send the guest link: guests type their own nickname. You can also add names below for them to tap."
+              : "Add your guest list below. Guests then tap their name on their phones."}
+          </li>
+        )}
       </ul>
 
       <form className="add-guests" onSubmit={add}>
