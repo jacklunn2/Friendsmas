@@ -16,7 +16,7 @@ export type Role = "host" | "stage" | "player";
 export type ActivityKind = "team" | "individual";
 export type ScoringScheme = "placement" | "perCorrect" | "judged";
 export type EntryKind = "award" | "bonus" | "penalty";
-export type StageScreen = "teams" | "activity" | "quiz" | "results" | "standings" | "final" | "welcome" | "missions" | "poll";
+export type StageScreen = "teams" | "activity" | "quiz" | "results" | "standings" | "final" | "welcome" | "missions" | "poll" | "prize" | "gallery";
 export type ActivityFormat = "live" | "quiz" | "poll";
 export type QuestionType = "choice" | "truefalse" | "number" | "text";
 export type QuizPhase = "intro" | "open" | "closed" | "revealed";
@@ -239,6 +239,7 @@ export interface PublicView {
   poll: PollView | null;
   /** The day's running order, written by the host, for the welcome screen. */
   agenda: AgendaItem[];
+  prize: PrizeView;
 }
 
 export interface AgendaItem {
@@ -246,6 +247,21 @@ export interface AgendaItem {
   time: string;
   item: string;
 }
+export interface PastWinner {
+  id: string;
+  imageId: string;
+  /** e.g. "2025: The Sprouts (Ava & Ben)" */
+  caption: string;
+}
+export const CAPTION_MAX = 80;
+export const MAX_PAST_WINNERS = 30;
+
+/** The grand prize: the trophy photo and the hall of fame. */
+export interface PrizeView {
+  trophyImageId: string | null;
+  pastWinners: PastWinner[];
+}
+
 export const AGENDA_TIME_MAX = 12;
 export const AGENDA_ITEM_MAX = 60;
 export const AGENDA_MAX_ITEMS = 14;

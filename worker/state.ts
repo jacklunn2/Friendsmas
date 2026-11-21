@@ -1,5 +1,6 @@
 import type {
   AgendaItem,
+  PrizeView,
   PollKind,
   PollOptionsKind,
   PollScoring,
@@ -204,6 +205,7 @@ export interface ServerState {
   quiz: QuizState;
   agenda: AgendaItem[];
   missions: MissionsState;
+  prize: PrizeView;
 }
 
 export interface MissionAssignment {
@@ -255,6 +257,7 @@ export function migrate(s: ServerState): ServerState {
   s.quiz ??= freshQuiz();
   s.agenda ??= [];
   s.missions ??= freshMissions(s);
+  s.prize ??= { trophyImageId: null, pastWinners: [] };
   // Block 4: teams type their own names; suggestions and mottos are gone.
   delete (s as { offeredNames?: unknown }).offeredNames;
   for (const t of s.teams) {
@@ -301,6 +304,7 @@ export function freshState(now: number): ServerState {
     quiz: freshQuiz(),
     agenda: [],
     missions: { list: [], autoOnJoin: false, assigned: {} },
+    prize: { trophyImageId: null, pastWinners: [] },
   };
   s.missions = freshMissions(s);
   return s;

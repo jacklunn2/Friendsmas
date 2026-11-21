@@ -3914,3 +3914,382 @@ img.member__emoji {
   color: var(--cranberry);
   font-weight: 700;
 }
+
+/* TV: intermission trophy */
+.intermission__trophy {
+  margin: 1vw 0 0;
+  display: grid;
+  justify-items: center;
+  gap: 0.6vw;
+}
+.intermission__trophy img {
+  max-height: 42vh;
+  max-width: 50vw;
+  border-radius: 1vw;
+  animation: trophy-glow 3.6s ease-in-out infinite alternate;
+}
+.intermission__trophy figcaption {
+  font-family: var(--display);
+  color: var(--brass);
+  font-size: 2vw;
+}
+
+/* TV: the grand prize */
+.prize {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  justify-items: center;
+  text-align: center;
+  gap: 1vw;
+  margin: -2.6vw -3.2vw;
+  padding: 2.6vw 3.2vw;
+  height: 100vh;
+  background: radial-gradient(ellipse 60% 70% at 50% 60%, #2a1d08 0%, #070504 70%);
+  overflow: hidden;
+  animation: prize-dark 1.2s ease-out both;
+}
+@keyframes prize-dark {
+  from {
+    background-color: var(--pine);
+    opacity: 0.4;
+  }
+}
+.prize__beam {
+  position: absolute;
+  top: -10vh;
+  width: 30vw;
+  height: 130vh;
+  background: linear-gradient(to bottom, rgba(255, 240, 200, 0.28), rgba(255, 240, 200, 0));
+  clip-path: polygon(45% 0, 55% 0, 100% 100%, 0 100%);
+  filter: blur(6px);
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+.prize__beam--left {
+  left: 10vw;
+  transform-origin: 50% 0;
+  animation: beam-sweep-l 3.4s ease-in-out both;
+}
+.prize__beam--right {
+  right: 10vw;
+  transform-origin: 50% 0;
+  animation: beam-sweep-r 3.4s ease-in-out both;
+}
+@keyframes beam-sweep-l {
+  0% {
+    transform: rotate(-40deg);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  60% {
+    transform: rotate(25deg);
+  }
+  100% {
+    transform: rotate(-22deg);
+  }
+}
+@keyframes beam-sweep-r {
+  0% {
+    transform: rotate(40deg);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  60% {
+    transform: rotate(-25deg);
+  }
+  100% {
+    transform: rotate(22deg);
+  }
+}
+.prize__kicker {
+  margin: 0;
+  font-size: 1.7vw;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mist);
+  animation: fade-up 900ms 0.4s ease-out both;
+}
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(1vw);
+  }
+}
+.prize__stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 0;
+}
+.prize__rays {
+  position: absolute;
+  width: 70vh;
+  height: 70vh;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, rgba(242, 181, 68, 0.22) 0deg 8deg, transparent 8deg 22deg);
+  mask-image: radial-gradient(circle, black 20%, transparent 70%);
+  -webkit-mask-image: radial-gradient(circle, black 20%, transparent 70%);
+  animation: rays-in 1s 3.4s ease-out both, rays-spin 24s 3.4s linear infinite;
+}
+@keyframes rays-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+@keyframes rays-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+.prize__trophy {
+  position: relative;
+  max-height: 52vh;
+  max-width: 50vw;
+  object-fit: contain;
+  border-radius: 1vw;
+  filter: drop-shadow(0 0 3vw rgba(242, 181, 68, 0.7));
+  animation: trophy-rise 1.6s 2.6s cubic-bezier(0.2, 1.1, 0.3, 1) both, trophy-float 4s 4.2s ease-in-out infinite alternate;
+}
+@keyframes trophy-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(40vh) scale(0.6);
+    filter: brightness(0);
+  }
+  60% {
+    filter: brightness(2.4) drop-shadow(0 0 6vw rgba(255, 230, 160, 1));
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes trophy-float {
+  to {
+    transform: translateY(-1.2vh);
+  }
+}
+.prize__sparkles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.prize__sparkles span {
+  position: absolute;
+  width: 0.8vw;
+  height: 0.8vw;
+  background: #fff3c4;
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  opacity: 0;
+  animation: twinkle 1.8s ease-in-out infinite;
+}
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.3) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.4) rotate(90deg);
+  }
+}
+.prize__title {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 7vw;
+  line-height: 1;
+  color: var(--brass);
+  text-shadow: 0 0 0.3em rgba(242, 181, 68, 0.6);
+  animation: slam 700ms 4s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+@keyframes slam {
+  from {
+    opacity: 0;
+    transform: scale(3);
+    filter: blur(8px);
+  }
+}
+.prize__sub {
+  margin: 0;
+  font-size: 2.2vw;
+  display: grid;
+  animation: fade-up 900ms 5.4s ease-out both;
+}
+.prize__small {
+  font-size: 1.1vw;
+  color: var(--mist);
+  animation: fade-up 900ms 7s ease-out both;
+}
+
+/* TV: hall of fame */
+.gallery {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 1.6vw 3vw;
+  align-items: center;
+}
+.gallery__head {
+  display: grid;
+  gap: 0.6vw;
+}
+.gallery__kicker {
+  margin: 0;
+  font-size: 1.8vw;
+  color: var(--mist);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+.gallery__title {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 400;
+  color: var(--brass);
+  font-size: 6vw;
+  line-height: 1;
+}
+.gallery__sting {
+  margin: 0.6vw 0 0;
+  font-size: 2vw;
+  font-style: italic;
+  animation: fade-up 800ms 400ms ease-out both;
+}
+.poster {
+  margin: 0;
+  justify-self: center;
+  background: #e9d9b0;
+  color: #2a1d12;
+  padding: 1.4vw 1.6vw 1.6vw;
+  border-radius: 0.4vw;
+  box-shadow: 0 1.6vw 4vw rgba(0, 0, 0, 0.55);
+  text-align: center;
+  transform: rotate(-2deg);
+  animation: poster-in 900ms cubic-bezier(0.2, 1.2, 0.4, 1) both;
+  max-width: 100%;
+}
+@keyframes poster-in {
+  from {
+    opacity: 0;
+    transform: rotate(-12deg) translateY(10vh) scale(0.8);
+  }
+}
+.poster__wanted {
+  margin: 0;
+  font-family: "Georgia", serif;
+  font-weight: 900;
+  font-size: 4.6vw;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.poster__for {
+  margin: 0.2vw 0 0.9vw;
+  font-family: "Georgia", serif;
+  font-size: 1.5vw;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+.poster__frame {
+  overflow: hidden;
+  border: 0.3vw solid #2a1d12;
+  width: min(40vw, 52vh);
+  aspect-ratio: 4 / 3;
+}
+.poster__photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: sepia(0.35) contrast(1.05);
+  animation: ken-burns 7s ease-in-out both;
+}
+@keyframes ken-burns {
+  from {
+    transform: scale(1.18) translate(2%, 2%);
+  }
+  to {
+    transform: scale(1) translate(0, 0);
+  }
+}
+.poster__caption {
+  margin-top: 0.9vw;
+  font-family: "Georgia", serif;
+  font-weight: 700;
+  font-size: 1.9vw;
+}
+.gallery__strip {
+  grid-column: 1 / -1;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 0.8vw;
+  justify-content: center;
+}
+.gallery__strip li {
+  width: 6vw;
+  aspect-ratio: 4 / 3;
+  border-radius: 0.4vw;
+  overflow: hidden;
+  opacity: 0.4;
+  transition: opacity 400ms, transform 400ms;
+}
+.gallery__strip li.is-current {
+  opacity: 1;
+  transform: translateY(-0.4vw);
+  box-shadow: 0 0 0 0.2vw var(--brass);
+}
+.gallery__strip img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Control room: grand prize */
+.upload {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.prize-edit {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.prize-edit__trophy {
+  width: 7rem;
+  height: 7rem;
+  object-fit: contain;
+  border-radius: 12px;
+  background: var(--pine);
+}
+.prize-edit__trophy--empty {
+  display: grid;
+  place-items: center;
+  font-size: 3rem;
+  opacity: 0.4;
+}
+.prize-edit__actions {
+  flex-wrap: wrap;
+}
+.winners-edit__row {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: center;
+}
+.winners-edit__row img {
+  width: 4.5rem;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+}

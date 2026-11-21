@@ -106,6 +106,7 @@ function base(s: ServerState, viewer: Viewer, now: number): PublicView {
     quiz: quizView(s, true),
     poll: pollView(s),
     agenda: s.agenda.map((a) => ({ ...a })),
+    prize: { trophyImageId: s.prize.trophyImageId, pastWinners: s.prize.pastWinners.map((w) => ({ ...w })) },
   };
 }
 

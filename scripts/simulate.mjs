@@ -456,6 +456,27 @@ async function main() {
   const dossiers = await stage.until((v) => v.stage.screen === "missions" && v.missionsReveal);
   check(dossiers.missionsReveal.length === 11 && dossiers.missionsReveal[0].status === "completed", "the finale reveals every mission, pulled-off ones first");
 
+  // --- Block 4: the grand prize and the hall of fame
+  const fakePng = new Uint8Array(400);
+  fakePng.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const uploadPicture = async () => {
+    const r = await fetch(`${BASE}/api/image`, { method: "POST", headers: { "content-type": "image/png", authorization: `Bearer ${good.body.token}` }, body: fakePng });
+    return (await r.json()).id;
+  };
+  const noPrize = await host.req("stage.show", { screen: "prize" }).catch((e) => e.message);
+  check(/trophy/.test(noPrize) || !!host.view.prize.trophyImageId, "the grand prize needs a trophy photo");
+  await host.req("prize.trophy", { imageId: await uploadPicture() });
+  await host.req("prize.winner.add", { imageId: await uploadPicture(), caption: "2025: Rehearsal Reindeer" });
+  await stage.until((v) => v.prize.trophyImageId && v.prize.pastWinners.some((w) => w.caption === "2025: Rehearsal Reindeer"));
+  const trophyRes = await fetch(`${BASE}/api/image/${stage.view.prize.trophyImageId}?c=${code}`);
+  check(trophyRes.status === 200, "the TV can load the trophy photo");
+  await host.req("stage.show", { screen: "prize" });
+  await stage.until((v) => v.stage.screen === "prize");
+  await host.req("stage.show", { screen: "gallery" });
+  await stage.until((v) => v.stage.screen === "gallery");
+  check(true, "The Grand Prize and the hall of fame go on the TV");
+  for (const w of host.view.prize.pastWinners.filter((x) => x.caption === "2025: Rehearsal Reindeer")) await host.req("prize.winner.remove", { id: w.id });
+
   for (const c of [host, stage, intruder, badPhone, dupe, lou, avaAgain, ...Object.values(phones)]) {
     try {
       c.close();

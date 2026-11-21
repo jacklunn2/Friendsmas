@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FINAL_REVEAL_MS, SPIN_MS, photoUrl, teamDisplayName, type RevealEventView, type StageView } from "../../../shared/types";
+import { FINAL_REVEAL_MS, SPIN_MS, imageUrl, photoUrl, teamDisplayName, type RevealEventView, type StageView } from "../../../shared/types";
 import { audioOn, enableAudio, sfx } from "../audio";
 import { storage, useRoom, useTicker } from "../net";
 import { Avatar, ConnectionBanner, EventCodeContext, formatClock, playerMap, TeamCard, teamStyle, Wordmark } from "../ui";
 import { MissionsReveal } from "./MissionsReveal";
 import { PollStage } from "./PollStage";
+import { GrandPrize, HallOfFame } from "./Prize";
 import { QuizStage } from "./QuizStage";
 import { ActivityIntro, ActivityResults, Standings } from "./Scoreboard";
 import { Welcome } from "./Welcome";
@@ -168,15 +169,20 @@ interface SceneProps {
 }
 
 function StageScene({ view, anim, serverNow, onLanded, onSpin }: SceneProps) {
-  if (view.intermission) return <Intermission />;
+  const trophyUrl = view.prize.trophyImageId ? imageUrl(view.prize.trophyImageId, view.eventCode) : null;
+  if (view.intermission) return <Intermission trophyUrl={trophyUrl} />;
   const { phase } = view.draw;
-  if (phase === "draft") return <Welcome view={view} trophyUrl={null} />;
+  if (phase === "draft") return <Welcome view={view} trophyUrl={trophyUrl} />;
   if (phase !== "complete" || anim) return <Draw view={view} anim={anim} onLanded={onLanded} onSpin={onSpin} />;
   switch (view.stage.screen) {
     case "welcome":
-      return <Welcome view={view} trophyUrl={null} />;
+      return <Welcome view={view} trophyUrl={trophyUrl} />;
     case "poll":
       return view.poll ? <PollStage key={`${view.poll.activityId}-${view.poll.question?.id ?? "intro"}`} view={view} serverNow={serverNow} /> : <Teams view={view} serverNow={serverNow} />;
+    case "prize":
+      return <GrandPrize view={view} />;
+    case "gallery":
+      return <HallOfFame view={view} />;
     case "missions":
       return view.missionsReveal ? <MissionsReveal view={view} /> : <Teams view={view} serverNow={serverNow} />;
     case "activity":
@@ -197,11 +203,17 @@ function StageScene({ view, anim, serverNow, onLanded, onSpin }: SceneProps) {
   }
 }
 
-function Intermission() {
+function Intermission({ trophyUrl }: { trophyUrl: string | null }) {
   return (
-    <section className="scene scene--centre">
+    <section className="scene scene--centre intermission">
       <Wordmark className="wordmark--stage" />
       <p className="stage__lede">Back in a moment</p>
+      {trophyUrl && (
+        <figure className="intermission__trophy">
+          <img src={trophyUrl} alt="The Friendsmas trophy" />
+          <figcaption>Still up for grabs…</figcaption>
+        </figure>
+      )}
     </section>
   );
 }

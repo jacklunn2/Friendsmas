@@ -176,6 +176,10 @@ function tvStatus(view: HostView): string {
       return "Welcome screen";
     case "missions":
       return "The secret missions reveal";
+    case "prize":
+      return "The Grand Prize";
+    case "gallery":
+      return "The hall of fame";
     case "poll":
       return view.poll && view.poll.index >= 0 ? `${a?.name ?? "Poll"}, question ${view.poll.index + 1}` : (a?.name ?? "Poll");
     default:

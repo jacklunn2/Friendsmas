@@ -368,3 +368,35 @@ describe("polls on phones", () => {
     expect(hostView(s, [], T0).polls[id]).toHaveLength(2);
   });
 });
+
+describe("the grand prize", () => {
+  it("keeps a trophy photo and a hall of fame, and deletes pictures that are replaced or removed", () => {
+    const s = setup(2);
+    expect(() => runAction(s, HOST, "prize.trophy", { imageId: "../etc" }, T0)).toThrow(/Upload/);
+    runAction(s, HOST, "prize.trophy", { imageId: "trophy111" }, T0);
+    const r = runAction(s, HOST, "prize.trophy", { imageId: "trophy222" }, T0);
+    expect(r.deleteImages).toEqual(["trophy111"]);
+    expect(stageView(s, T0).prize.trophyImageId).toBe("trophy222");
+    runAction(s, HOST, "prize.winner.add", { imageId: "winners2023", caption: "2023: The Baubles" }, T0);
+    runAction(s, HOST, "prize.winner.add", { imageId: "winners2024", caption: "2024: Sprout Squad" }, T0);
+    const [w1, w2] = s.prize.pastWinners;
+    runAction(s, HOST, "prize.winner.move", { id: w2.id, direction: "up" }, T0);
+    expect(stageView(s, T0).prize.pastWinners.map((w) => w.caption)).toEqual(["2024: Sprout Squad", "2023: The Baubles"]);
+    expect(runAction(s, HOST, "prize.winner.remove", { id: w1.id }, T0).deleteImages).toEqual(["winners2023"]);
+    runAction(s, HOST, "event.startFresh", { confirm: "START FRESH" }, T0);
+    expect(s.prize.pastWinners).toHaveLength(1);
+    expect(s.prize.trophyImageId).toBe("trophy222");
+  });
+
+  it("puts the grand prize moment and the hall of fame on the TV once there's something to show", () => {
+    const s = setup(2);
+    expect(() => runAction(s, HOST, "stage.show", { screen: "prize" }, T0)).toThrow(/trophy/);
+    expect(() => runAction(s, HOST, "stage.show", { screen: "gallery" }, T0)).toThrow(/past winners/);
+    runAction(s, HOST, "prize.trophy", { imageId: "trophy111" }, T0);
+    runAction(s, HOST, "prize.winner.add", { imageId: "winners2024" }, T0);
+    runAction(s, HOST, "stage.show", { screen: "prize" }, T0);
+    expect(stageView(s, T0).stage.screen).toBe("prize");
+    runAction(s, HOST, "stage.show", { screen: "gallery" }, T0);
+    expect(stageView(s, T0).stage.screen).toBe("gallery");
+  });
+});
