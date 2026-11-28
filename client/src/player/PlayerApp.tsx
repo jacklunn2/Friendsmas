@@ -429,6 +429,20 @@ function InGame({ view, send, serverNow, getToken, code }: InGameProps) {
 
   if (photoOpen) return photoPanel(false);
 
+  // The hosts are the House: no team, no answers to give.
+  if (me.house) {
+    return (
+      <section className="phone__card house-phone">
+        {phase === "complete" && <NowPlaying view={view} serverNow={serverNow} />}
+        <p className="house-phone__mark" aria-hidden>
+          🏠
+        </p>
+        <h1 className="phone__title">You're the House</h1>
+        <p>You're one of the hosts, so you're not on a team. The House scores the same as the lowest team in each quiz round, and takes its points in Beat the House rounds when nobody beats it.</p>
+      </section>
+    );
+  }
+
   if ((phase === "locked" || phase === "revealing") && hidden) {
     return <Waiting title="Eyes on the TV" body="Teams are being drawn. You'll see yours here when the draw is complete." />;
   }

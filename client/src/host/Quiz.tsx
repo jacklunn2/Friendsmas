@@ -829,7 +829,8 @@ function FactPicker({
       .filter((q) => q.type === "whowrote" && q.id !== currentQuestionId)
       .map((q) => q.factId),
   );
-  const facts = view.roster.flatMap((p) => (view.questionnaires[p.id]?.facts ?? []).map((f) => ({ ...f, writer: p.name })));
+  // The hosts (the House) can't be guessed, so only players' facts.
+  const facts = view.roster.filter((p) => !p.house).flatMap((p) => (view.questionnaires[p.id]?.facts ?? []).map((f) => ({ ...f, writer: p.name })));
   if (!facts.length) return <p className="callout">No secret facts yet. They come from the guests' questionnaires.</p>;
   return (
     <label className="field">

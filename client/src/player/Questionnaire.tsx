@@ -26,6 +26,9 @@ export function QuestionnaireForm({ view, send, onDone }: { view: PlayerView; se
   const others = view.menu.filter((m) => m.playerId !== meId);
   const [sharedWith, setSharedWith] = useState<string | null>(existing?.sharedWith ?? null);
   const [choosing, setChoosing] = useState(false);
+  // The hosts are the House: they bring food and a photo, but don't play.
+  const [house, setHouse] = useState(!!view.me?.house);
+  const drawn = !!view.me?.teamId;
   const shared = sharedWith ? view.menu.find((m) => m.playerId === sharedWith) : undefined;
   const [dish, setDish] = useState(existing?.dish ?? "");
   const [category, setCategory] = useState<DishCategory | null>(existing?.category ?? null);
@@ -39,7 +42,8 @@ export function QuestionnaireForm({ view, send, onDone }: { view: PlayerView; se
     setBusy(true);
     setError(null);
     try {
-      await send("player.answers", sharedWith ? { sharedWith, facts } : { dish, category, dietary, facts });
+      const who = drawn ? {} : { house };
+      await send("player.answers", sharedWith ? { sharedWith, facts, ...who } : { dish, category, dietary, facts, ...who });
       onDone?.();
     } catch (err) {
       setError((err as Error).message);
@@ -52,6 +56,18 @@ export function QuestionnaireForm({ view, send, onDone }: { view: PlayerView; se
     <form className="phone__card quest" onSubmit={submit}>
       <h1 className="phone__title">{existing ? "Your answers" : "A few questions"}</h1>
       {!existing && <p>Two minutes, then you're done. You can change your answers any time before the day.</p>}
+
+      {!drawn && (
+        <div className="quest__role segmented" role="radiogroup" aria-label="Are you playing or hosting?">
+          <button type="button" role="radio" aria-checked={!house} className={!house ? "is-selected" : ""} onClick={() => setHouse(false)}>
+            I'm playing
+          </button>
+          <button type="button" role="radio" aria-checked={house} className={house ? "is-selected" : ""} onClick={() => setHouse(true)}>
+            I'm hosting (the House)
+          </button>
+        </div>
+      )}
+      {house && <p className="quest__help">The hosts are the House: you won't be on a team, and your photo appears with the House on the leaderboard.</p>}
 
       <fieldset className="quest__group">
         <legend className="quest__legend">🍽️ What are you bringing?</legend>
@@ -97,7 +113,7 @@ export function QuestionnaireForm({ view, send, onDone }: { view: PlayerView; se
         ) : null}
         {!shared && !choosing && others.length > 0 && (
           <button type="button" className="btn btn--ghost btn--small quest__with" onClick={() => setChoosing(true)}>
-            Making a dish with someone who's already answered? Choose it here
+            Cooking with someone who's already answered? Pick their dish
           </button>
         )}
         {!shared && !choosing && (
@@ -138,7 +154,7 @@ export function QuestionnaireForm({ view, send, onDone }: { view: PlayerView; se
       </fieldset>
 
       <fieldset className="quest__group">
-        <legend className="quest__legend">🤫 Secret facts</legend>
+        <legend className="quest__legend">🤫 Secret facts{house ? " (optional for the House)" : ""}</legend>
         <p className="quest__help">
           Things about you that nobody here would guess. Only the host sees these, until one turns up in a game of "Who wrote this?".
         </p>
@@ -159,7 +175,7 @@ export function QuestionnaireForm({ view, send, onDone }: { view: PlayerView; se
               value={f}
               onChange={(e) => setFacts(facts.map((x, j) => (j === i ? e.target.value : x)))}
               placeholder={i === 0 ? "e.g. I once got lost in IKEA for three hours" : "Another one"}
-              required={i === 0}
+              required={i === 0 && !house}
             />
           </label>
         ))}
@@ -175,7 +191,7 @@ export function QuestionnaireForm({ view, send, onDone }: { view: PlayerView; se
           {error}
         </p>
       )}
-      <button className="btn btn--primary btn--block" disabled={busy || (!sharedWith && (!dish.trim() || !category)) || !facts[0]?.trim()}>
+      <button className="btn btn--primary btn--block" disabled={busy || (!sharedWith && (!dish.trim() || !category)) || (!house && !facts[0]?.trim())}>
         {busy ? "Saving…" : existing ? "Save my answers" : "Done"}
       </button>
       {existing && onDone && (

@@ -35,6 +35,8 @@ export interface PublicPlayer {
   isTest: boolean;
   /** Photo version, or null if the guest hasn't added a photo. See photoUrl(). */
   photo: number | null;
+  /** One of the hosts: part of the House, not a player. */
+  house: boolean;
 }
 
 export interface PublicTeam {

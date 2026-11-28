@@ -465,6 +465,13 @@ function RosterRow({ player: p, team, run }: { player: HostPlayer; team?: Public
   }
 
   const actions: { label: string; onClick: () => void }[] = [{ label: "Rename", onClick: () => setEditing(true) }];
+  if (!p.teamId && !p.isTest) {
+    actions.push(
+      p.house
+        ? { label: "Make them a player", onClick: () => run("guest.house", { id: p.id, on: false }, `${p.name} is a player`) }
+        : { label: "Make them a host (the House)", onClick: () => run("guest.house", { id: p.id, on: true }, `${p.name} is one of the hosts`) },
+    );
+  }
   if ((p.status === "joined" || p.status === "expected") && !p.teamId) {
     actions.push({ label: "Exclude from the draw", onClick: () => run("guest.exclude", { id: p.id }) });
   }
@@ -491,7 +498,7 @@ function RosterRow({ player: p, team, run }: { player: HostPlayer; team?: Public
     actions.push({
       label: "Remove from the list",
       onClick: () => {
-        if (confirm(`Remove ${p.name} from the guest list?`)) run("guest.remove", { id: p.id });
+        if (confirm(`Remove ${p.name} from the guest list? Their survey answers and photo are deleted too.`)) run("guest.remove", { id: p.id });
       },
     });
   }
@@ -501,6 +508,7 @@ function RosterRow({ player: p, team, run }: { player: HostPlayer; team?: Public
       <span className="row__name">
         {p.status === "expected" ? <span aria-hidden>·</span> : <Avatar player={p} />} {p.name}
         {p.isTest && <span className="tag">test</span>}
+        {p.house && <span className="tag tag--house">🏠 House</span>}
       </span>
       <span className="row__status">
         {team ? (

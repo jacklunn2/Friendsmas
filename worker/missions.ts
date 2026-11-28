@@ -61,7 +61,7 @@ function give(s: ServerState, pl: ServerPlayer, missionId: string, now: number) 
   s.missions.assigned[pl.id] = { missionId, status: "active", seen: false, entryId: null, assignedAt: now };
 }
 
-const eligible = (pl: ServerPlayer) => pl.status === "joined";
+const eligible = (pl: ServerPlayer) => pl.status === "joined" && !pl.house;
 
 /** Hands a mission to a guest who has just joined, if the host turned that on. */
 export function autoAssignMission(s: ServerState, pl: ServerPlayer, now: number): void {

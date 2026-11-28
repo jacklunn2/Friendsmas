@@ -50,14 +50,17 @@ export function parseAnswers(s: ServerState, pl: ServerPlayer, p: Payload, now: 
   const category = (owner ? owner.answers.category : p.category) as DishCategory;
   if (!DISH_CATEGORIES.includes(category)) throw new UserError("Choose what kind of dish it is.");
   const dietary = owner ? owner.answers.dietary : str(p, "dietary", { max: DIETARY_MAX, optional: true, label: "the dietary notes" });
-  if (!Array.isArray(p.facts)) throw new UserError("Add at least one secret fact.");
-  const texts = p.facts.map((f, i) => {
+  // The hosts (the House) don't need secret facts.
+  const house = p.house === undefined ? !!pl.house : p.house === true;
+  if (!Array.isArray(p.facts) && !house) throw new UserError("Add at least one secret fact.");
+  const rawFacts: unknown[] = Array.isArray(p.facts) ? p.facts : [];
+  const texts = rawFacts.map((f, i) => {
     if (typeof f !== "string") throw new UserError("Facts must be text.");
     const t = f.trim().replace(/\s+/g, " ");
     if (t.length > FACT_MAX) throw new UserError(`Fact ${i + 1} must be ${FACT_MAX} characters or fewer.`);
     return t;
   }).filter(Boolean);
-  if (!texts.length) throw new UserError("Add at least one secret fact.");
+  if (!texts.length && !house) throw new UserError("Add at least one secret fact.");
   if (texts.length > MAX_FACTS) throw new UserError(`Add up to ${MAX_FACTS} facts.`);
   const old = pl.answers?.facts ?? [];
   const facts = texts.map((text, i) => ({ id: old[i]?.id ?? newId(s, "f"), text }));
@@ -149,7 +152,23 @@ export function allFacts(s: ServerState): { id: string; text: string; playerId: 
   return s.players.flatMap((p) => (p.answers?.facts ?? []).map((f) => ({ ...f, playerId: p.id })));
 }
 
+/** Makes a guest one of the hosts (the House) or a player. Only before they're on a team. */
+function setHouse(s: ServerState, pl: ServerPlayer, on: boolean) {
+  if (on && pl.teamId) throw new UserError(`${pl.name} is already on a team, so can't join the House now.`);
+  pl.house = on;
+  // The House doesn't do secret missions.
+  if (on) delete s.missions.assigned[pl.id];
+}
+
 export const guestsHost: Record<string, Handler> = {
+  /** Puts a guest in the House (the hosts) or back among the players. */
+  "guest.house": (s, _a, p) => {
+    const pl = findPlayer(s, p.id);
+    if ((p.on === true) === !!pl.house) return { noChange: true };
+    setHouse(s, pl, p.on === true);
+    return { audit: ["guest.house", p.on === true ? `${pl.name} is one of the hosts (the House)` : `${pl.name} is a player`] };
+  },
+
   /** The host fills in or corrects a guest's answers (e.g. for someone who told them in person). */
   "guest.answers": (s, _a, p, now) => {
     const pl = findPlayer(s, p.playerId);
@@ -179,6 +198,7 @@ export const guestsPlayer: Record<string, Handler> = {
     if (!actor.playerId) throw new UserError("Join the event first.");
     const pl = findPlayer(s, actor.playerId);
     const first = !pl.answers;
+    if (p.house !== undefined && (p.house === true) !== !!pl.house) setHouse(s, pl, p.house === true);
     pl.answers = parseAnswers(s, pl, p, now);
     return { audit: ["player.answers", first ? `${pl.name} finished the questionnaire` : `${pl.name} updated their questionnaire`] };
   },

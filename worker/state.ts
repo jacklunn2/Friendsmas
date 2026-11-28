@@ -43,6 +43,8 @@ export interface ServerPlayer {
   photo?: number | null;
   /** Questionnaire answers, once submitted. */
   answers?: Questionnaire | null;
+  /** One of the hosts: part of the House. Not drawn into a team, no mission. */
+  house?: boolean;
 }
 
 export interface Questionnaire {

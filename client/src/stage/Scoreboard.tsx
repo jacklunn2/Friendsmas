@@ -137,6 +137,7 @@ export function Standings({ view }: { view: StageView }) {
   const winners = rows.filter((r) => r.rank === 1);
   const house = st?.house ?? null;
   const houseWins = house?.rank === 1;
+  const hosts = view.players.filter((p) => p.house);
   // Where the House goes: above every team it has at least matched (it wins ties).
   const houseAt = house ? (() => {
     const i = rows.findIndex((r) => r.points <= house.points);
@@ -179,11 +180,11 @@ export function Standings({ view }: { view: StageView }) {
           if (!team) return null;
           const line = <StandingsLine key={r.teamId} row={r} team={team} players={players} delay={delays[i]} animate={animate} leader={i === 0} />;
           // The House takes its place among the teams.
-          return houseAt === i ? [<HouseLine key="house" house={st.house!} delay={houseDelay} animate={animate} />, line] : line;
+          return houseAt === i ? [<HouseLine key="house" house={st.house!} hosts={hosts} delay={houseDelay} animate={animate} />, line] : line;
         })}
-        {st.house && houseAt === rows.length && <HouseLine key="house" house={st.house} delay={houseDelay} animate={animate} />}
+        {st.house && houseAt === rows.length && <HouseLine key="house" house={st.house} hosts={hosts} delay={houseDelay} animate={animate} />}
       </ol>
-      {final && showWinner && (houseWins ? <HouseWins /> : <Winners rows={winners} teams={teams} players={players} />)}
+      {final && showWinner && (houseWins ? <HouseWins hosts={hosts} /> : <Winners rows={winners} teams={teams} players={players} />)}
     </section>
   );
 }
@@ -224,7 +225,17 @@ function StandingsLine({
   );
 }
 
-function HouseLine({ house, delay, animate }: { house: NonNullable<NonNullable<StageView["standings"]>["house"]>; delay: number; animate: boolean }) {
+function HouseLine({
+  house,
+  hosts,
+  delay,
+  animate,
+}: {
+  house: NonNullable<NonNullable<StageView["standings"]>["house"]>;
+  hosts: PublicPlayer[];
+  delay: number;
+  animate: boolean;
+}) {
   const points = useCountUp(animate ? (house.prevPoints ?? 0) : house.points, house.points, delay + 250, 900);
   const gained = house.prevPoints === null ? null : house.points - house.prevPoints;
   const moved = house.prevRank === null ? 0 : house.prevRank - house.rank;
@@ -233,6 +244,11 @@ function HouseLine({ house, delay, animate }: { house: NonNullable<NonNullable<S
       <span className="board-row__place">{ordinal(house.rank)}</span>
       <span className="board-row__team">
         <span className="board-row__name">🏠 The House</span>
+        <span className="board-row__members">
+          {hosts.map((p) => (
+            <Avatar key={p.id} player={p} className="board-row__avatar" />
+          ))}
+        </span>
       </span>
       <span className="board-row__move">
         {gained !== null && gained !== 0 && <span className="board-row__gained">{signed(gained)}</span>}
@@ -289,16 +305,25 @@ function Winners({ rows, teams, players }: { rows: StandingsRow[]; teams: Map<st
   );
 }
 
-function HouseWins() {
+function HouseWins({ hosts }: { hosts: PublicPlayer[] }) {
   return (
     <div className="winner winner--house" role="status">
       <div className="winner__card">
         <p className="winner__kicker">The winner of Friendsmas is…</p>
         <div className="winner__team">
-          <div className="winner__house-mark" aria-hidden>
-            🏠
-          </div>
+          {hosts.length ? (
+            <div className="winner__photos">
+              {hosts.map((p) => (
+                <Avatar key={p.id} player={p} className="winner__photo" />
+              ))}
+            </div>
+          ) : (
+            <div className="winner__house-mark" aria-hidden>
+              🏠
+            </div>
+          )}
           <h2 className="winner__name">The House</h2>
+          {hosts.length > 0 && <p className="winner__members">{hosts.map((p) => p.name).join(" & ")}</p>}
           <p className="winner__members">The House always wins. Better luck next Christmas.</p>
         </div>
       </div>

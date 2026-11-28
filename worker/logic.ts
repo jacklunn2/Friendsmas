@@ -64,7 +64,8 @@ function nameTaken(s: ServerState, name: string, exceptId?: string): boolean {
 }
 
 export function eligibleForDraw(s: ServerState): ServerPlayer[] {
-  return s.players.filter((p) => p.status === "joined");
+  // The hosts are the House: they never go into a team.
+  return s.players.filter((p) => p.status === "joined" && !p.house);
 }
 
 /** Who has been revealed so far, from the stage's point of view. */
@@ -420,6 +421,7 @@ const host: Record<string, Handler> = {
     const pl = findPlayer(s, p.playerId);
     if (pl.teamId) throw new UserError(`${pl.name} is already on a team.`);
     if (pl.status !== "joined") throw new UserError(`${pl.name} hasn't joined yet.`);
+    if (pl.house) throw new UserError(`${pl.name} is one of the hosts (the House). Make them a player first.`);
     let team: ServerTeam;
     if (p.teamId === "random") {
       const smallest = Math.min(...s.teams.map((t) => t.memberIds.length));

@@ -42,6 +42,7 @@ function publicPlayer(p: ServerPlayer, revealed: Set<string>): PublicPlayer {
     teamId: revealed.has(p.id) ? p.teamId : null,
     isTest: p.isTest,
     photo: p.photo ?? null,
+    house: !!p.house,
   };
 }
 

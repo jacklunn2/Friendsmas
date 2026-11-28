@@ -74,10 +74,10 @@ export function secondsFor(quiz: Activity, q: Question): number {
 // ---------------------------------------------------------------------------
 // Polls and "Who wrote this?" inside a round
 
-/** Guests who can be picked or can play: on a team and not waiting for approval. */
-function guestsInPlay(s: ServerState) {
+/** Guests who can be picked or can play: on a team and not waiting for approval. With `house`, the hosts too. */
+function guestsInPlay(s: ServerState, house = false) {
   return s.players
-    .filter((p) => p.teamId && p.status !== "pending" && s.teams.some((t) => t.id === p.teamId))
+    .filter((p) => p.status !== "pending" && ((p.teamId && s.teams.some((t) => t.id === p.teamId)) || (house && p.house && p.status === "joined")))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -91,7 +91,7 @@ export function choicesFor(s: ServerState, q: Question): PollOptionView[] {
   if (q.type !== "poll") return [];
   const kind = q.optionsKind ?? "custom";
   if (kind === "teams") return s.teams.map((t) => ({ key: t.id, label: teamDisplayName(t) }));
-  if (kind === "players") return guestsInPlay(s).map((p) => ({ key: p.id, label: p.name }));
+  if (kind === "players") return guestsInPlay(s, true).map((p) => ({ key: p.id, label: p.name }));
   return q.options.map((label, i) => ({ key: String(i), label }));
 }
 
@@ -703,7 +703,7 @@ export const quizPlayer: Record<string, Handler> = {
     let value: string;
     if (q.type === "facemash") {
       const v = (p.value ?? {}) as Partial<MashAnswer>;
-      const inPlay = new Set(guestsInPlay(s).map((x) => x.id));
+      const inPlay = new Set(guestsInPlay(s, true).map((x) => x.id));
       const guests = [...new Set(Array.isArray(v.guests) ? v.guests : [])];
       if (guests.some((g) => typeof g !== "string" || !inPlay.has(g))) throw new UserError("Pick guests from the list.");
       if (guests.length > (q.pickIds?.length ?? 0)) throw new UserError(`Pick up to ${q.pickIds?.length ?? 0} guests.`);

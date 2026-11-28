@@ -13,7 +13,7 @@ export function MissionsPanel({ view, run }: { view: HostView; run: Run }) {
   const m = view.missions;
   const players = new Map(view.roster.map((p) => [p.id, p]));
   const byPlayer = new Map(m.assignments.map((a) => [a.playerId, a]));
-  const here = view.roster.filter((p) => p.status === "joined");
+  const here = view.roster.filter((p) => p.status === "joined" && !p.house);
   const without = here.filter((p) => !byPlayer.has(p.id));
   const held = new Set(m.assignments.map((a) => a.missionId));
   const free = m.list.filter((x) => !held.has(x.id));

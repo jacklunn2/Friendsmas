@@ -5628,3 +5628,25 @@ img.member__emoji {
 .quest__with {
   justify-self: start;
 }
+
+/* Phones: the hosts are the House */
+.house-phone__mark {
+  margin: 0;
+  font-size: 3rem;
+  text-align: center;
+}
+.quest__role {
+  margin: 0.4rem 0;
+}
+.tag--house {
+  background: #5c5139;
+  color: #f3e6c4;
+}
+.quest__with {
+  white-space: normal;
+  text-align: left;
+  max-width: 100%;
+}
+.quest__role > button {
+  flex: 1 1 0;
+}

@@ -129,6 +129,28 @@ describe("dishes brought together", () => {
   });
 });
 
+describe("the hosts are the House", () => {
+  it("fill in the survey without secret facts, and stay out of the draw and missions", () => {
+    const s = setup(6);
+    const [finn, jack] = s.players;
+    runAction(s, as(s, 0), "player.answers", { dish: "Ham", category: "main", dietary: "", facts: [], house: true }, T0);
+    runAction(s, HOST, "guest.house", { id: jack.id, on: true }, T0);
+    expect(finn.house).toBe(true);
+    expect(playerView(s, finn.id, T0).me!.house).toBe(true);
+    expect(stageView(s, T0).menu.some((m) => m.dish === "Ham")).toBe(true);
+    // Players still need a fact.
+    expect(() => runAction(s, as(s, 2), "player.answers", { dish: "Pie", category: "dessert", dietary: "", facts: [] }, T0)).toThrow(/secret fact/);
+    runAction(s, HOST, "missions.handOut", {}, T0);
+    expect(Object.keys(s.missions.assigned).sort()).toEqual(s.players.slice(2).map((p) => p.id).sort());
+    drawTeams(s);
+    expect(finn.teamId).toBeNull();
+    expect(jack.teamId).toBeNull();
+    expect(s.players.slice(2).every((p) => p.teamId)).toBe(true);
+    expect(() => runAction(s, HOST, "team.add", { playerId: finn.id, teamId: "random" }, T0)).toThrow(/hosts/);
+    expect(() => runAction(s, HOST, "guest.house", { id: s.players[2].id, on: true }, T0)).toThrow(/already on a team/);
+  });
+});
+
 describe("the welcome screen", () => {
   it("shows the host's agenda, keeping row ids and dropping blank rows", () => {
     const s = setup(2);
