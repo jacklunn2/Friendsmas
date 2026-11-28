@@ -16,7 +16,6 @@ export function HousePad({ activity: a, view, run, fixed = false }: { activity: 
   const [teamPoints, setTeamPoints] = useState(String(h?.teamPoints ?? 5));
   const [housePoints, setHousePoints] = useState(String(h?.housePoints ?? 5));
   const [houseScore, setHouseScore] = useState("");
-  const [peek, setPeek] = useState(false);
   useEffect(() => {
     if (h) {
       setDirection(h.direction);
@@ -97,8 +96,8 @@ export function HousePad({ activity: a, view, run, fixed = false }: { activity: 
               }}
             >
               <label className="field field--inline">
-                <span className="field__label">The House's score (set before the round; hidden until the face-off)</span>
-                <input className="input input--small input--num" type="password" inputMode="decimal" value={houseScore} onChange={(e) => setHouseScore(e.target.value)} autoComplete="off" />
+                <span className="field__label">The House's score (set before the round; the TV and phones don't see it until the face-off)</span>
+                <input className="input input--small input--num" type="text" inputMode="decimal" value={houseScore} onChange={(e) => setHouseScore(e.target.value)} autoComplete="off" />
               </label>
               <button className="btn btn--small btn--primary" disabled={!houseScore.trim()}>
                 🔒 Lock it in
@@ -106,10 +105,7 @@ export function HousePad({ activity: a, view, run, fixed = false }: { activity: 
             </form>
           ) : (
             <p className="house-pad__locked">
-              🔒 The House's score is locked in:{" "}
-              <button className="btn btn--small btn--ghost" onClick={() => setPeek(!peek)}>
-                {peek ? secret.houseScore : "Peek"}
-              </button>
+              🔒 The House's score is locked in: <strong>{secret.houseScore}</strong>
             </p>
           )}
           {live && drawn && (
