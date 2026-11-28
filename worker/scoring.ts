@@ -332,11 +332,6 @@ export const scoringHost: Record<string, Handler> = {
       s.stage = { screen: "prize", activityId: null, timer: null };
       return { audit: ["stage.show", "The Grand Prize on the TV"] };
     }
-    if (screen === "gallery") {
-      if (!s.prize.pastWinners.length) throw new UserError("Add some past winners first.");
-      s.stage = { screen: "gallery", activityId: null, timer: null };
-      return { audit: ["stage.show", "The hall of fame on the TV"] };
-    }
     if (screen === "welcome") {
       s.stage = { screen: "welcome", activityId: null, timer: null };
       return { audit: ["stage.show", "Welcome screen on the TV"] };

@@ -200,13 +200,6 @@ export function PrizePanel({ view, run }: { view: HostView; run: Run }) {
             disabled={pastWinners.length >= MAX_PAST_WINNERS}
             onUploaded={(imageId) => run("prize.winner.add", { imageId, caption: "" }, "Photo added. Give it a caption.")}
           />
-          <button
-            className="btn btn--small btn--ghost"
-            disabled={!pastWinners.length || !drawn || view.stage.screen === "gallery"}
-            onClick={() => run("stage.show", { screen: "gallery" })}
-          >
-            {view.stage.screen === "gallery" ? "On the TV" : "Show on the TV"}
-          </button>
         </span>
       </div>
       {pastWinners.length > 0 ? (
@@ -235,7 +228,7 @@ export function PrizePanel({ view, run }: { view: HostView; run: Run }) {
           ))}
         </ul>
       ) : (
-        <p className="host__muted">Add photos of past winners for a slideshow of wanted posters on the TV.</p>
+        <p className="host__muted">Add photos of past winners. They appear in the welcome screen slideshow, in a gold frame under "Hall of Fame".</p>
       )}
     </section>
   );

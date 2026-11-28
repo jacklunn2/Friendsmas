@@ -7,6 +7,7 @@ import { POLL_SCORING_LABEL, signed, teamDisplayName, type StageView } from "../
 import { audioOn, sfx } from "../audio";
 import { useTicker } from "../net";
 import { Avatar, formatClock, playerMap, teamStyle } from "../ui";
+import { HouseCall } from "./HouseCall";
 
 export function PollStage({ view, serverNow }: { view: StageView; serverNow: () => number }) {
   const pl = view.poll!;
@@ -42,6 +43,7 @@ export function PollStage({ view, serverNow }: { view: StageView; serverNow: () 
       <section className="scene quiz-intro">
         <p className="activity-intro__kind">{whowrote ? `${pl.total} secret facts` : `Poll · ${pl.total} questions`}</p>
         <h1 className="activity-intro__name">{a.name}</h1>
+        <HouseCall view={view} activityId={a.id} />
         <p className="quiz-intro__how">
           📱{" "}
           {whowrote

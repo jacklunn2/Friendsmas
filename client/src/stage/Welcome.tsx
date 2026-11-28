@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
-import { DISH_CATEGORIES, DISH_CATEGORY_LABEL, imageUrl, type Memory, type StageView } from "../../../shared/types";
+import { DISH_CATEGORIES, DISH_CATEGORY_LABEL, imageUrl, type Memory, type PastWinner, type StageView } from "../../../shared/types";
 import { Avatar, playerMap, Wordmark } from "../ui";
 
 const PHOTO_MS = 6_000;
@@ -20,17 +20,51 @@ function usePhotoIndex(count: number) {
   return count ? i % count : 0;
 }
 
-function Memories({ memories, index, code }: { memories: Memory[]; index: number; code: string }) {
-  const m = memories[index];
+interface Slide {
+  id: string;
+  imageId: string;
+  caption: string;
+  winner: boolean;
+}
+
+/** Memories with past winners mixed in: a winner after every two memories. */
+function slidesFrom(memories: Memory[], winners: PastWinner[]): Slide[] {
+  const m = memories.map((x) => ({ ...x, winner: false }));
+  const w = winners.map((x) => ({ ...x, winner: true }));
+  if (!m.length || !w.length) return [...m, ...w];
+  const out: Slide[] = [];
+  let wi = 0;
+  m.forEach((x, i) => {
+    out.push(x);
+    if (i % 2 === 1) {
+      const x = w[wi % w.length];
+      wi++;
+      out.push({ ...x, id: `${x.id}-${i}` });
+    }
+  });
+  // Every winner appears at least once a lap.
+  while (wi < w.length) out.push(w[wi++]);
+  return out;
+}
+
+function Slideshow({ slides, index, code }: { slides: Slide[]; index: number; code: string }) {
+  const s = slides[index];
+  const next = slides[(index + 1) % slides.length];
   return (
-    <div className="memories">
-      <h2 className="welcome__title">Friendsmas memories</h2>
-      <figure key={m.id} className="memories__frame">
-        <img className="memories__photo" src={imageUrl(m.imageId, code)} alt={m.caption || "A Friendsmas memory"} />
-        {m.caption && <figcaption className="memories__caption">{m.caption}</figcaption>}
+    <div className={`memories${s.winner ? " memories--winner" : ""}`}>
+      <h2 key={s.winner ? "hof" : "mem"} className="welcome__title memories__title">
+        {s.winner ? "Hall of Fame" : "Friendsmas memories"}
+      </h2>
+      <figure key={s.id} className="memories__frame">
+        <div className="memories__mat">
+          <div className="memories__window">
+            <img className="memories__photo" src={imageUrl(s.imageId, code)} alt={s.caption || (s.winner ? "Past Friendsmas winners" : "A Friendsmas memory")} />
+          </div>
+        </div>
+        {s.caption && <figcaption className="memories__caption">{s.caption}</figcaption>}
       </figure>
       {/* The next photo, loading quietly so the change is instant. */}
-      {memories.length > 1 && <img hidden alt="" src={imageUrl(memories[(index + 1) % memories.length].imageId, code)} />}
+      {slides.length > 1 && <img hidden alt="" src={imageUrl(next.imageId, code)} />}
     </div>
   );
 }
@@ -52,8 +86,9 @@ export function Welcome({ view, trophyUrl }: { view: StageView; trophyUrl: strin
   const menu = view.menu.filter((m) => players.has(m.playerId));
   const groups = DISH_CATEGORIES.map((c) => ({ c, items: menu.filter((m) => m.category === c) })).filter((g) => g.items.length);
   const dense = menu.length > 12;
-  const photo = usePhotoIndex(view.memories.length);
-  const photos = view.memories.length > 0;
+  const slides = useMemo(() => slidesFrom(view.memories, view.prize.pastWinners), [view.memories, view.prize.pastWinners]);
+  const photo = usePhotoIndex(slides.length);
+  const photos = slides.length > 0;
 
   return (
     <section className={`scene welcome${trophyUrl ? " welcome--trophy" : ""}${photos ? " welcome--photos" : ""}`}>
@@ -64,7 +99,7 @@ export function Welcome({ view, trophyUrl }: { view: StageView; trophyUrl: strin
 
       {photos && (
         <div className="welcome__photos">
-          <Memories memories={view.memories} index={photo} code={view.eventCode} />
+          <Slideshow slides={slides} index={photo} code={view.eventCode} />
         </div>
       )}
       <div className={`welcome__menu${dense ? " is-dense" : ""}`}>

@@ -6,7 +6,7 @@ import { Avatar, ConnectionBanner, EventCodeContext, formatClock, playerMap, Tea
 import { HouseFaceOff } from "./HouseFaceOff";
 import { MissionsReveal } from "./MissionsReveal";
 import { PollStage } from "./PollStage";
-import { GrandPrize, HallOfFame } from "./Prize";
+import { GrandPrize } from "./Prize";
 import { QuizStage } from "./QuizStage";
 import { ActivityIntro, ActivityResults, Standings } from "./Scoreboard";
 import { VideoOverlay } from "./VideoOverlay";
@@ -191,8 +191,6 @@ function StageScene({ view, anim, serverNow, onLanded, onSpin }: SceneProps) {
       return view.houseReveal ? <HouseFaceOff key={view.houseReveal.activityId} view={view} /> : <Teams view={view} serverNow={serverNow} />;
     case "prize":
       return <GrandPrize view={view} />;
-    case "gallery":
-      return <HallOfFame view={view} />;
     case "missions":
       return view.missionsReveal ? <MissionsReveal view={view} /> : <Teams view={view} serverNow={serverNow} />;
     case "activity":

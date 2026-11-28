@@ -390,16 +390,21 @@ describe("the grand prize", () => {
     expect(s.prize.trophyImageId).toBe("trophy222");
   });
 
-  it("puts the grand prize moment and the hall of fame on the TV once there's something to show", () => {
+  it("puts the grand prize moment on the TV once there's a trophy; past winners live in the welcome slideshow", () => {
     const s = setup(2);
     expect(() => runAction(s, HOST, "stage.show", { screen: "prize" }, T0)).toThrow(/trophy/);
-    expect(() => runAction(s, HOST, "stage.show", { screen: "gallery" }, T0)).toThrow(/past winners/);
     runAction(s, HOST, "prize.trophy", { imageId: "trophy111" }, T0);
     runAction(s, HOST, "prize.winner.add", { imageId: "winners2024" }, T0);
     runAction(s, HOST, "stage.show", { screen: "prize" }, T0);
     expect(stageView(s, T0).stage.screen).toBe("prize");
-    runAction(s, HOST, "stage.show", { screen: "gallery" }, T0);
-    expect(stageView(s, T0).stage.screen).toBe("gallery");
+    expect(() => runAction(s, HOST, "stage.show", { screen: "gallery" }, T0)).toThrow(/Choose what to show/);
+    expect(stageView(s, T0).prize.pastWinners).toHaveLength(1);
+  });
+
+  it("moves an event that was showing the old hall of fame screen to the welcome screen", () => {
+    const s = setup(1);
+    (s.stage as { screen: string }).screen = "gallery";
+    expect(migrate(s).stage.screen).toBe("welcome");
   });
 });
 

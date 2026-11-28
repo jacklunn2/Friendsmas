@@ -183,8 +183,6 @@ function tvStatus(view: HostView): string {
       return `${a?.name ?? "Activity"}: Beat the House`;
     case "prize":
       return "The Grand Prize";
-    case "gallery":
-      return "The hall of fame";
     case "poll":
       return view.poll && view.poll.index >= 0 ? `${a?.name ?? "Poll"}, question ${view.poll.index + 1}` : (a?.name ?? "Poll");
     default:

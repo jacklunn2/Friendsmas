@@ -5,6 +5,7 @@ import { OPTION_LETTERS, imageUrl, signed, teamDisplayName, type StageView } fro
 import { audioOn, sfx } from "../audio";
 import { useTicker } from "../net";
 import { Avatar, formatClock, playerMap, teamStyle } from "../ui";
+import { HouseCall } from "./HouseCall";
 
 export function QuizStage({ view, serverNow }: { view: StageView; serverNow: () => number }) {
   const qz = view.quiz!;
@@ -39,6 +40,7 @@ export function QuizStage({ view, serverNow }: { view: StageView; serverNow: () 
       <section className="scene quiz-intro">
         <p className="activity-intro__kind">Quiz · {qz.total} questions</p>
         <h1 className="activity-intro__name">{a.name}</h1>
+        <HouseCall view={view} activityId={a.id} />
         <p className="quiz-intro__how">
           📱 {a.kind === "team" ? "Answer on your phones: one answer per team, and the last one in counts." : "Answer on your own phone. Every right answer scores for your team."}
         </p>

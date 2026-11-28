@@ -287,6 +287,8 @@ export function migrate(s: ServerState): ServerState {
   s.missions ??= freshMissions(s);
   s.prize ??= { trophyImageId: null, pastWinners: [] };
   s.openJoin ??= true;
+  // The separate hall of fame screen was folded into the welcome slideshow.
+  if ((s.stage.screen as string) === "gallery") s.stage = { screen: "welcome", activityId: null, timer: null };
   s.memories ??= [];
   s.videos ??= [];
   s.video ??= null;

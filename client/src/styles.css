@@ -5042,3 +5042,122 @@ img.member__emoji {
 .welcome__agenda {
   flex: none;
 }
+
+/* TV: "Can you beat THE HOUSE?" */
+.house-call {
+  display: grid;
+  justify-items: center;
+  gap: 0.4vw;
+  margin: 1vw 0;
+}
+.house-call__ask {
+  font-size: 3vw;
+  font-weight: 700;
+  color: var(--mist);
+  opacity: 0;
+  transform: translateY(1vw);
+  transition: opacity 500ms, transform 500ms;
+}
+.house-call__ask.is-in {
+  opacity: 1;
+  transform: none;
+}
+.house-call__house {
+  font-family: var(--display);
+  font-size: 9vw;
+  line-height: 1;
+  color: #ffd9a8;
+  letter-spacing: 0.04em;
+  opacity: 0;
+  text-shadow: 0 0 0.35em rgba(226, 68, 92, 0.75), 0 0.06em 0 #7a1020;
+}
+.house-call.is-hit .house-call__house {
+  animation: house-slam 700ms cubic-bezier(0.2, 1.5, 0.4, 1) forwards, house-shake 420ms 650ms ease-out;
+}
+@keyframes house-slam {
+  from {
+    opacity: 0;
+    transform: scale(3.2);
+    filter: blur(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+    filter: none;
+  }
+}
+@keyframes house-shake {
+  20% { translate: -0.5vw 0; }
+  40% { translate: 0.4vw 0; }
+  60% { translate: -0.25vw 0; }
+  80% { translate: 0.1vw 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .house-call.is-hit .house-call__house { animation: none; opacity: 1; }
+}
+
+/* TV: framed photos in the welcome slideshow; past winners get a gilded frame */
+.memories__frame {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 0.9vw;
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+  overflow: visible;
+}
+.memories__mat {
+  min-height: 0;
+  padding: 0.75vw;
+  background: #f1e7d2;
+  border-radius: 0.4vw;
+  box-shadow: 0 0 0 0.12vw rgba(0, 0, 0, 0.35), 0 1.2vw 2.6vw rgba(0, 0, 0, 0.55);
+}
+.memories__window {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 0.15vw;
+  box-shadow: inset 0 0 0 0.1vw rgba(0, 0, 0, 0.25);
+  background: #000;
+}
+.memories__caption,
+.welcome--photos .memories__caption {
+  position: static;
+  padding: 0;
+  background: none;
+  font-size: 1.35vw;
+  font-weight: 700;
+  color: var(--snow);
+  text-align: center;
+  line-height: 1.25;
+}
+.memories__title {
+  animation: fade-in-black 600ms ease-out;
+}
+.memories--winner .memories__title {
+  color: var(--brass);
+  text-shadow: 0 0 0.4em rgba(242, 181, 68, 0.45);
+}
+.memories--winner .memories__mat {
+  padding: 1.1vw;
+  border-radius: 0.2vw;
+  background:
+    linear-gradient(135deg, #7a4d0e 0%, #f6d77a 18%, #b07d1e 36%, #fbe7a6 52%, #a8741a 70%, #f3cf6b 86%, #7a4d0e 100%);
+  box-shadow:
+    inset 0 0 0 0.22vw rgba(70, 40, 5, 0.65),
+    inset 0 0 0 0.5vw rgba(255, 236, 170, 0.35),
+    0 0 3.2vw rgba(242, 181, 68, 0.45),
+    0 1.2vw 2.6vw rgba(0, 0, 0, 0.55);
+}
+.memories--winner .memories__window {
+  box-shadow: inset 0 0 0 0.25vw #3b2606, inset 0 0 1.2vw rgba(0, 0, 0, 0.5);
+}
+.memories--winner .memories__caption {
+  justify-self: center;
+  padding: 0.35vw 1.4vw;
+  border-radius: 0.2vw;
+  color: #3b2606;
+  background: linear-gradient(180deg, #fbe7a6, #d9a93e);
+  box-shadow: 0 0.2vw 0.6vw rgba(0, 0, 0, 0.4);
+}

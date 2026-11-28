@@ -16,6 +16,7 @@ import { audioOn, sfx } from "../audio";
 import { useTicker } from "../net";
 import { rowDelays, WINNER_DELAY_MS } from "../timing";
 import { Avatar, formatClock, playerMap, teamStyle } from "../ui";
+import { HouseCall } from "./HouseCall";
 
 /** Reveals already shown on this TV, so switching screens doesn't replay them. */
 const seenReveals = new Set<string>();
@@ -51,6 +52,7 @@ export function ActivityIntro({ view, serverNow }: { view: StageView; serverNow:
     <section className="scene activity-intro">
       <p className="activity-intro__kind">{a.kind === "team" ? "Team challenge" : "Every player for their team"}</p>
       <h1 className="activity-intro__name">{a.name}</h1>
+      {!running && <HouseCall view={view} activityId={a.id} />}
       {!timer && <p className="activity-intro__hint">📱 Instructions are on your phones</p>}
       {timer && (
         <p className={`activity-intro__timer${done ? " is-done" : left <= 10_000 && running ? " is-low" : ""}`} aria-live="off">

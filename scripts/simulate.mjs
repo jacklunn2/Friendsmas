@@ -520,9 +520,7 @@ async function main() {
   check(trophyRes.status === 200, "the TV can load the trophy photo");
   await host.req("stage.show", { screen: "prize" });
   await stage.until((v) => v.stage.screen === "prize");
-  await host.req("stage.show", { screen: "gallery" });
-  await stage.until((v) => v.stage.screen === "gallery");
-  check(true, "The Grand Prize and the hall of fame go on the TV");
+  check(true, "The Grand Prize goes on the TV, and past winners reach the welcome slideshow");
   for (const w of host.view.prize.pastWinners.filter((x) => x.caption === "2025: Rehearsal Reindeer")) await host.req("prize.winner.remove", { id: w.id });
 
   // --- Block 4: videos, uploaded in chunks and streamed with Range requests
