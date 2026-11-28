@@ -122,7 +122,7 @@ export function Welcome({ view, trophyUrl }: { view: StageView; trophyUrl: strin
                     const p = players.get(m.playerId)!;
                     const cooks = [p, ...m.withIds.map((id) => players.get(id)).filter((x) => !!x)];
                     return (
-                      <li key={m.playerId} className="welcome__dish">
+                      <li key={`${m.playerId}-${m.dishId}`} className="welcome__dish">
                         <span className="welcome__dish-cooks">
                           {cooks.map((c) => (
                             <Avatar key={c!.id} player={c!} className="welcome__dish-photo" />

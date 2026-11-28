@@ -292,7 +292,7 @@ function AllSet({ view, pending, onAnswers, onPhoto, onName }: { view: PlayerVie
         <div>
           {q && (
             <p>
-              Bringing <strong>{q.dish}</strong> <span className="phone__muted">({q.category === "other" ? "other" : q.category === "drinks" ? "drinks" : q.category})</span>
+              Bringing <strong>{q.dishes.map((d) => d.dish).join(" + ")}</strong>
             </p>
           )}
           <p className="phone__muted">

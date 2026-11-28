@@ -58,6 +58,17 @@ export interface Questionnaire {
   updatedAt: number;
   /** Bringing another guest's dish with them. Their own dish fields keep a copy, used if that guest leaves. */
   sharedWith?: string | null;
+  /** Every dish they're bringing (dish/category/dietary above repeat the first). Missing on older answers. */
+  dishes?: Dish[];
+}
+
+export interface Dish {
+  id: string;
+  dish: string;
+  category: DishCategory;
+  dietary: string;
+  /** Left off the welcome page's menu by the host. */
+  hidden?: boolean;
 }
 
 export interface ServerTeam {

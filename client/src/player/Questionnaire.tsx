@@ -8,6 +8,7 @@ import {
   DISH_CATEGORY_LABEL,
   DISH_MAX,
   FACT_MAX,
+  MAX_DISHES,
   MAX_FACTS,
   type DishCategory,
   type PlayerView,
@@ -23,16 +24,26 @@ export function QuestionnaireForm({ view, send, onDone }: { view: PlayerView; se
   const meId = view.me?.id;
   const players = playerMap(view.players);
   // Other people's dishes, for couples cooking together.
-  const others = view.menu.filter((m) => m.playerId !== meId);
+  // One entry per person, with all their dishes.
+  const others = [...new Set(view.menu.filter((m) => m.playerId !== meId).map((m) => m.playerId))].map((playerId) => ({
+    playerId,
+    dish: view.menu.filter((m) => m.playerId === playerId).map((m) => m.dish).join(" + "),
+  }));
   const [sharedWith, setSharedWith] = useState<string | null>(existing?.sharedWith ?? null);
   const [choosing, setChoosing] = useState(false);
   // The hosts are the House: they bring food and a photo, but don't play.
   const [house, setHouse] = useState(!!view.me?.house);
   const drawn = !!view.me?.teamId;
-  const shared = sharedWith ? view.menu.find((m) => m.playerId === sharedWith) : undefined;
-  const [dish, setDish] = useState(existing?.dish ?? "");
-  const [category, setCategory] = useState<DishCategory | null>(existing?.category ?? null);
-  const [dietary, setDietary] = useState(existing?.dietary ?? "");
+  const sharedDishes = sharedWith ? view.menu.filter((m) => m.playerId === sharedWith) : [];
+  const shared = sharedDishes.length ? { playerId: sharedWith!, dish: sharedDishes.map((m) => m.dish).join(" + ") } : undefined;
+  type DraftDish = { dish: string; category: DishCategory | null; dietary: string };
+  const [dishes, setDishes] = useState<DraftDish[]>(
+    existing?.dishes?.length && !existing.sharedWith
+      ? existing.dishes.map((d) => ({ dish: d.dish, category: d.category, dietary: d.dietary }))
+      : [{ dish: "", category: null, dietary: "" }],
+  );
+  const setDish = (i: number, patch: Partial<DraftDish>) => setDishes(dishes.map((d, j) => (j === i ? { ...d, ...patch } : d)));
+  const dishesReady = dishes.every((d) => d.dish.trim() && d.category);
   const [facts, setFacts] = useState<string[]>(existing?.facts.length ? existing.facts.map((f) => f.text) : [""]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +54,7 @@ export function QuestionnaireForm({ view, send, onDone }: { view: PlayerView; se
     setError(null);
     try {
       const who = drawn ? {} : { house };
-      await send("player.answers", sharedWith ? { sharedWith, facts, ...who } : { dish, category, dietary, facts, ...who });
+      await send("player.answers", sharedWith ? { sharedWith, facts, ...who } : { dishes, facts, ...who });
       onDone?.();
     } catch (err) {
       setError((err as Error).message);
@@ -82,7 +93,7 @@ export function QuestionnaireForm({ view, send, onDone }: { view: PlayerView; se
           </div>
         ) : choosing ? (
           <div className="quest__shared">
-            <p className="quest__help">Tap the dish you're making together. It'll appear once on the menu, with both of you.</p>
+            <p className="quest__help">Tap the person whose food you're bringing together (or who's bringing food for you). It'll appear once on the menu, with both of you.</p>
             <ul className="quest__dishes">
               {others.map((m) => {
                 const who = players.get(m.playerId);
@@ -113,43 +124,64 @@ export function QuestionnaireForm({ view, send, onDone }: { view: PlayerView; se
         ) : null}
         {!shared && !choosing && others.length > 0 && (
           <button type="button" className="btn btn--ghost btn--small quest__with" onClick={() => setChoosing(true)}>
-            Cooking with someone who's already answered? Pick their dish
+            Cooking with someone, or someone bringing food for you? Pick their dish
           </button>
         )}
-        {!shared && !choosing && (
-        <>
-        <label className="field">
-          <span className="field__label">Dish</span>
-          <input className="input" value={dish} maxLength={DISH_MAX} onChange={(e) => setDish(e.target.value)} placeholder="e.g. Grandma's trifle" required />
-        </label>
-        <div className="field">
-          <span className="field__label">What kind of dish?</span>
-          <div className="quest__cats" role="radiogroup" aria-label="What kind of dish">
-            {DISH_CATEGORIES.map((c) => (
-              <button
-                key={c}
-                type="button"
-                role="radio"
-                aria-checked={category === c}
-                className={`quest__cat${category === c ? " is-selected" : ""}`}
-                onClick={() => setCategory(c)}
-              >
-                {CATEGORY_LABEL[c]}
-              </button>
-            ))}
-          </div>
-        </div>
-        <label className="field">
-          <span className="field__label">Dietary notes (optional)</span>
-          <input
-            className="input"
-            value={dietary}
-            maxLength={DIETARY_MAX}
-            onChange={(e) => setDietary(e.target.value)}
-            placeholder="e.g. vegetarian, contains nuts"
-          />
-        </label>
-        </>
+        {!shared &&
+          !choosing &&
+          dishes.map((d, i) => (
+            <div key={i} className="quest__dish">
+              <label className="field">
+                <span className="field__label">
+                  {dishes.length > 1 ? `Dish ${i + 1}` : "Dish"}
+                  {i > 0 && (
+                    <button type="button" className="quest__remove" onClick={() => setDishes(dishes.filter((_, j) => j !== i))}>
+                      Remove
+                    </button>
+                  )}
+                </span>
+                <input
+                  className="input"
+                  value={d.dish}
+                  maxLength={DISH_MAX}
+                  onChange={(e) => setDish(i, { dish: e.target.value })}
+                  placeholder={i === 0 ? "e.g. Grandma's trifle" : "e.g. Roast potatoes"}
+                  required
+                />
+              </label>
+              <div className="field">
+                <span className="field__label">What kind of dish?</span>
+                <div className="quest__cats" role="radiogroup" aria-label={`What kind of dish is dish ${i + 1}`}>
+                  {DISH_CATEGORIES.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      role="radio"
+                      aria-checked={d.category === c}
+                      className={`quest__cat${d.category === c ? " is-selected" : ""}`}
+                      onClick={() => setDish(i, { category: c })}
+                    >
+                      {CATEGORY_LABEL[c]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <label className="field">
+                <span className="field__label">Dietary notes (optional)</span>
+                <input
+                  className="input"
+                  value={d.dietary}
+                  maxLength={DIETARY_MAX}
+                  onChange={(e) => setDish(i, { dietary: e.target.value })}
+                  placeholder="e.g. vegetarian, contains nuts"
+                />
+              </label>
+            </div>
+          ))}
+        {!shared && !choosing && dishes.length < MAX_DISHES && (
+          <button type="button" className="btn btn--ghost btn--small quest__with" onClick={() => setDishes([...dishes, { dish: "", category: null, dietary: "" }])}>
+            Bringing more than one thing? Add another dish
+          </button>
         )}
       </fieldset>
 
@@ -191,7 +223,7 @@ export function QuestionnaireForm({ view, send, onDone }: { view: PlayerView; se
           {error}
         </p>
       )}
-      <button className="btn btn--primary btn--block" disabled={busy || (!sharedWith && (!dish.trim() || !category)) || (!house && !facts[0]?.trim())}>
+      <button className="btn btn--primary btn--block" disabled={busy || (!sharedWith && !dishesReady) || (!house && !facts[0]?.trim())}>
         {busy ? "Saving…" : existing ? "Save my answers" : "Done"}
       </button>
       {existing && onDone && (

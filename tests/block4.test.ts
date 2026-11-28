@@ -59,7 +59,7 @@ describe("the questionnaire", () => {
     runAction(s, as(s, 0), "player.answers", answers("Trifle", "dessert", ["I was on Blue Peter"]), T0);
     const others = JSON.stringify([stageView(s, T0), playerView(s, s.players[1].id, T0), playerView(s, null, T0)]);
     expect(others).not.toContain("Blue Peter");
-    expect(stageView(s, T0).menu).toEqual([{ playerId: s.players[0].id, dish: "Trifle", category: "dessert", dietary: "", withIds: [] }]);
+    expect(stageView(s, T0).menu).toEqual([{ playerId: s.players[0].id, dishId: expect.any(String), dish: "Trifle", category: "dessert", dietary: "", withIds: [] }]);
     expect(hostView(s, [], T0).questionnaires[s.players[0].id].facts[0].text).toBe("I was on Blue Peter");
   });
 
@@ -91,6 +91,44 @@ describe("the questionnaire", () => {
     const old = JSON.parse(JSON.stringify(s));
     expect(() => playerView(migrate(old), old.players[0].id, T0)).not.toThrow();
     expect(publicJson(s)).toBeTruthy();
+  });
+});
+
+describe("several dishes, and leaving one off the menu", () => {
+  it("takes up to three dishes, each with its own course and notes", () => {
+    const s = setup(2);
+    const dishes = [
+      { dish: "Roast lamb", category: "main", dietary: "" },
+      { dish: "Garlic greens", category: "side", dietary: "Vegan" },
+    ];
+    runAction(s, as(s, 0), "player.answers", { dishes, facts: ["x"] }, T0);
+    expect(stageView(s, T0).menu.map((m) => [m.dish, m.category])).toEqual([
+      ["Roast lamb", "main"],
+      ["Garlic greens", "side"],
+    ]);
+    const mine = playerView(s, s.players[0].id, T0).myQuestionnaire!;
+    expect(mine.dishes.map((d) => d.dish)).toEqual(["Roast lamb", "Garlic greens"]);
+    expect(mine.dish).toBe("Roast lamb");
+    const four = Array.from({ length: 4 }, (_, i) => ({ dish: `Dish ${i}`, category: "other", dietary: "" }));
+    expect(() => runAction(s, as(s, 0), "player.answers", { dishes: four, facts: ["x"] }, T0)).toThrow(/up to 3/);
+    expect(() => runAction(s, as(s, 0), "player.answers", { dishes: [{ dish: "Pie", category: "cake", dietary: "" }], facts: ["x"] }, T0)).toThrow(/kind of dish/);
+  });
+
+  it("lets the host leave a dish off the welcome page, and put it back", () => {
+    const s = setup(2);
+    runAction(s, as(s, 0), "player.answers", { dishes: [{ dish: "Trifle", category: "dessert", dietary: "" }, { dish: "Ham", category: "main", dietary: "" }], facts: ["x"] }, T0);
+    runAction(s, as(s, 1), "player.answers", answers("Trifle!", "dessert"), T0);
+    expect(hostView(s, [], T0).foodWarnings.some((w) => w.kind === "duplicate")).toBe(true);
+    const trifle = hostView(s, [], T0).questionnaires[s.players[1].id].dishes[0];
+    runAction(s, HOST, "guest.hideDish", { playerId: s.players[1].id, dishId: trifle.id, hidden: true }, T0);
+    expect(stageView(s, T0).menu.map((m) => m.dish).sort()).toEqual(["Ham", "Trifle"]);
+    expect(hostView(s, [], T0).foodWarnings.some((w) => w.kind === "duplicate")).toBe(false);
+    expect(hostView(s, [], T0).questionnaires[s.players[1].id].dishes[0].hidden).toBe(true);
+    // Editing their answers keeps it hidden.
+    runAction(s, as(s, 1), "player.answers", answers("Trifle", "dessert"), T0);
+    expect(stageView(s, T0).menu).toHaveLength(2);
+    runAction(s, HOST, "guest.hideDish", { playerId: s.players[1].id, dishId: trifle.id, hidden: false }, T0);
+    expect(stageView(s, T0).menu).toHaveLength(3);
   });
 });
 

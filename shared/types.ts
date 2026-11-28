@@ -421,6 +421,18 @@ export const DISH_CATEGORY_LABEL: Record<DishCategory, string> = {
 /** Categories the food list warns about when nobody is bringing one. */
 export const EXPECTED_CATEGORIES: readonly DishCategory[] = ["main", "side", "dessert", "drinks"];
 export const DISH_MAX = 60;
+/** How many dishes one guest can list. */
+export const MAX_DISHES = 3;
+
+/** One dish a guest is bringing. */
+export interface DishView {
+  id: string;
+  dish: string;
+  category: DishCategory;
+  dietary: string;
+  /** The host has left it off the welcome page's menu (say, someone else is bringing the same thing). */
+  hidden: boolean;
+}
 export const DIETARY_MAX = 120;
 export const FACT_MAX = 200;
 export const MAX_FACTS = 3;
@@ -432,6 +444,8 @@ export interface SecretFact {
 
 /** A guest's answers. Facts only ever go to the host and to the guest who wrote them. */
 export interface QuestionnaireView {
+  /** Every dish they're bringing. dish/category/dietary repeat the first, for older screens. */
+  dishes: DishView[];
   dish: string;
   category: DishCategory;
   dietary: string;
@@ -444,6 +458,7 @@ export interface QuestionnaireView {
 /** One dish on the TV's welcome menu. */
 export interface MenuItem {
   playerId: string;
+  dishId: string;
   dish: string;
   category: DishCategory;
   dietary: string;

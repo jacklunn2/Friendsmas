@@ -60,18 +60,7 @@ export function QuestionnairePanel({ view, run }: { view: HostView; run: Run }) 
           {view.foodWarnings.map((w) => (
             <li key={w.message}>
               {w.message}{" "}
-              {w.kind === "duplicate" && (
-                <button
-                  className="btn btn--small btn--ghost"
-                  onClick={async () => {
-                    // Everyone after the first is bringing the first person's dish with them.
-                    for (const id of w.playerIds.slice(1)) await run("guest.shareDish", { playerId: id, withId: w.playerIds[0] });
-                  }}
-                  title="For couples cooking together: the dish appears once on the menu, with both names"
-                >
-                  Same dish: list it once
-                </button>
-              )}
+              {w.kind === "duplicate" && <span className="host__muted">Use "Leave off the welcome page" on one of them below.</span>}
             </li>
           ))}
         </ul>
@@ -105,7 +94,34 @@ export function QuestionnairePanel({ view, run }: { view: HostView; run: Run }) 
                 <td>
                   {a ? (
                     <>
-                      <span className={dupIds.has(p.id) ? "food-group__dup" : undefined}>{a.dish}</span> <span className="tag">{DISH_CATEGORY_LABEL[a.category]}</span>
+                      {a.sharedWith ? (
+                        <span>{a.dishes.map((d) => d.dish).join(" + ")}</span>
+                      ) : (
+                        <ul className="plain-list host-dishes">
+                          {a.dishes.map((d) => (
+                            <li key={d.id} className={`host-dishes__dish${d.hidden ? " is-hidden" : ""}`}>
+                              <span>
+                                <span className={dupIds.has(p.id) && !d.hidden ? "food-group__dup" : undefined}>{d.dish}</span>{" "}
+                                <span className="tag">{DISH_CATEGORY_LABEL[d.category]}</span>
+                                {d.dietary && <span className="host__muted"> {d.dietary}</span>}
+                                {d.hidden && <span className="host__muted"> (not on the welcome page)</span>}
+                              </span>
+                              <button
+                                className="btn btn--small btn--ghost"
+                                onClick={() =>
+                                  run(
+                                    "guest.hideDish",
+                                    { playerId: p.id, dishId: d.id, hidden: !d.hidden },
+                                    d.hidden ? `${d.dish} is back on the welcome page` : `${d.dish} left off the welcome page`,
+                                  )
+                                }
+                              >
+                                {d.hidden ? "Show it again" : "Leave off the welcome page"}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                       {a.sharedWith && (
                         <div className="host__muted">
                           With {view.roster.find((x) => x.id === a.sharedWith)?.name ?? "someone"} (listed once){" "}
@@ -114,7 +130,6 @@ export function QuestionnairePanel({ view, run }: { view: HostView; run: Run }) 
                           </button>
                         </div>
                       )}
-                      {a.dietary && <div className="host__muted">{a.dietary}</div>}
                     </>
                   ) : (
                     <span className="host__muted">Not done</span>
@@ -164,7 +179,13 @@ function AnswersEditor({ player, view, run, onClose }: { player: HostPlayer; vie
     const sameDish = a?.sharedWith && dish === a.dish && category === a.category && dietary === a.dietary;
     const ok = await run(
       "guest.answers",
-      { playerId: player.id, dish, category, dietary, facts: facts.split("\n"), sharedWith: sameDish ? a!.sharedWith : null },
+      {
+        playerId: player.id,
+        // Only the first dish is edited here; the others stay as they are.
+        dishes: [{ dish, category, dietary }, ...(a?.dishes.slice(1) ?? []).map((d) => ({ dish: d.dish, category: d.category, dietary: d.dietary }))],
+        facts: facts.split("\n"),
+        sharedWith: sameDish ? a!.sharedWith : null,
+      },
       `Saved ${player.name}'s answers`,
     );
     if (ok) onClose();

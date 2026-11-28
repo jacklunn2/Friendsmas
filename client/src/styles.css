@@ -5726,3 +5726,23 @@ img.member__emoji {
   align-items: center;
   gap: 0.4rem;
 }
+
+/* Control room: each dish a guest is bringing */
+.host-dishes {
+  display: grid;
+  gap: 0.25rem;
+}
+.host-dishes__dish {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+.host-dishes__dish.is-hidden > span:first-child {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.quest__dish + .quest__dish {
+  border-top: 1px solid var(--spruce-line);
+  padding-top: 0.6rem;
+}
