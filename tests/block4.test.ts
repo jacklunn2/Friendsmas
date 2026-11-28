@@ -587,3 +587,31 @@ describe("Friendsmas memories", () => {
     expect(s.memories).toHaveLength(1);
   });
 });
+
+describe("starting fresh after the guest link has gone out", () => {
+  it("keeps real guests, their answers and photos, and everything the host made, while clearing teams and points", () => {
+    const s = setup(4);
+    runAction(s, as(s, 0), "player.answers", answers("Trifle", "dessert"), T0);
+    s.players[0].photo = 3;
+    runAction(s, HOST, "guest.addTest", { count: 2 }, T0);
+    runAction(s, HOST, "agenda.save", { items: [{ time: "12:00", item: "Arrivals" }] }, T0);
+    runAction(s, HOST, "memories.add", { imageId: "memory0001" }, T0);
+    const { id } = runAction(s, HOST, "activity.create", { name: "Sole Mates", kind: "individual", scoring: "perCorrect", perCorrect: 1 }, T0).data as { id: string };
+    drawTeams(s);
+    expect(id).toBeTruthy();
+    runAction(s, HOST, "score.adjust", { teamId: s.players[0].teamId, points: 2, reason: "Sole Mates" }, T0);
+    runAction(s, HOST, "event.startFresh", { confirm: "START FRESH" }, T0);
+    expect(s.players.map((p) => p.name)).toEqual(["Guest 1", "Guest 2", "Guest 3", "Guest 4"]);
+    expect(s.players[0]).toMatchObject({ photo: 3, teamId: null, status: "joined" });
+    expect(s.players[0].answers!.dish).toBe("Trifle");
+    expect(s.players[0].token).toBeTruthy();
+    expect(s.teams).toEqual([]);
+    expect(s.ledger).toEqual([]);
+    expect(s.activities.map((a) => a.name)).toEqual(["Sole Mates"]);
+    expect(s.agenda).toHaveLength(1);
+    expect(s.memories).toHaveLength(1);
+    // Ticking "also remove every guest" is the only way the guests go.
+    runAction(s, HOST, "event.startFresh", { confirm: "START FRESH", clearGuests: true }, T0);
+    expect(s.players).toEqual([]);
+  });
+});

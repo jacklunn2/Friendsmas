@@ -4910,3 +4910,51 @@ img.member__emoji {
   max-height: 26rem;
   overflow-y: auto;
 }
+
+/* TV: welcome screen with the memories slideshow in the middle */
+.welcome.welcome--photos {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 0.8fr);
+  grid-template-areas:
+    "head head side"
+    "menu photos side"
+    "here here side";
+  column-gap: 2.4vw;
+}
+.welcome__photos {
+  grid-area: photos;
+  min-height: 0;
+}
+.welcome--photos .welcome__dish-photo {
+  width: 2.6vw;
+  height: 2.6vw;
+  font-size: 1.4vw;
+}
+.welcome--photos .welcome__dish-name {
+  font-size: 1.3vw;
+}
+.welcome--photos .welcome__dish-by {
+  font-size: 1vw;
+}
+.welcome--photos .welcome__group-title {
+  font-size: 1.1vw;
+}
+.welcome--photos .welcome__groups {
+  column-gap: 1.6vw;
+}
+.welcome--photos .agenda__row {
+  font-size: 1.25vw;
+  grid-template-columns: 5.4vw minmax(0, 1fr);
+}
+.welcome--photos .welcome__trophy img {
+  max-height: 24vh;
+}
+.welcome--photos .welcome__qr {
+  width: min(10vw, 22vh);
+}
+.welcome--photos .memories__caption {
+  font-size: 1.4vw;
+}
+.welcome--photos .welcome__url {
+  font-size: 0.85vw;
+  max-width: none;
+}

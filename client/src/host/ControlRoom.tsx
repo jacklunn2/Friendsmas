@@ -879,10 +879,20 @@ function StartFresh({ run }: { run: Run }) {
             }}
           >
             <h2 className="dialog__title">Start fresh?</h2>
-            <p>This clears the team draw, team names, every point and the leaderboard, and removes test guests. Your activities and the guest link stay the same.</p>
+            <p>
+              <strong>Cleared:</strong> the team draw, team names, every point and the leaderboard, quiz and poll answers, House scores, who has which
+              secret mission, and test guests.
+            </p>
+            <p>
+              <strong>Kept:</strong> your activities, quiz and poll questions, the missions list, agenda, trophy, past winners, memories, videos and the
+              guest link.
+            </p>
             <label className="check">
               <input type="checkbox" checked={clearGuests} onChange={(e) => setClearGuests(e.target.checked)} />
-              <span>Also remove everyone from the guest list, with their photos</span>
+              <span>
+                Also remove every guest, with their photos and questionnaire answers. Leave this unticked once you've sent the guest link, or their
+                answers are lost.
+              </span>
             </label>
             <label className="field">
               <span className="field__label">Type START FRESH to confirm</span>
