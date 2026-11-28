@@ -1,5 +1,6 @@
 import type {
   AgendaItem,
+  Memory,
   HouseDirection,
   VideoInfo,
   VideoPlayback,
@@ -226,6 +227,8 @@ export interface ServerState {
   prize: PrizeView;
   /** True: guests can type their own nickname and join straight away. False: new names wait for the host. */
   openJoin: boolean;
+  /** Photos from past Friendsmases for the welcome screen. */
+  memories: Memory[];
   videos: VideoInfo[];
   video: VideoPlayback | null;
   videoSeq: number;
@@ -284,6 +287,7 @@ export function migrate(s: ServerState): ServerState {
   s.missions ??= freshMissions(s);
   s.prize ??= { trophyImageId: null, pastWinners: [] };
   s.openJoin ??= true;
+  s.memories ??= [];
   s.videos ??= [];
   s.video ??= null;
   s.videoSeq ??= 0;
@@ -335,6 +339,7 @@ export function freshState(now: number): ServerState {
     missions: { list: [], autoOnJoin: false, assigned: {} },
     prize: { trophyImageId: null, pastWinners: [] },
     openJoin: true,
+    memories: [],
     videos: [],
     video: null,
     videoSeq: 0,

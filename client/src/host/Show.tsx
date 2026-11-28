@@ -7,6 +7,7 @@ import {
   AGENDA_MAX_ITEMS,
   AGENDA_TIME_MAX,
   CAPTION_MAX,
+  MAX_MEMORIES,
   MAX_PAST_WINNERS,
   VIDEO_MAX_BYTES,
   VIDEO_TOTAL_MAX_BYTES,
@@ -240,7 +241,7 @@ export function PrizePanel({ view, run }: { view: HostView; run: Run }) {
   );
 }
 
-function CaptionInput({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+function CaptionInput({ value, onSave, placeholder }: { value: string; onSave: (v: string) => void; placeholder?: string }) {
   const [text, setText] = useState(value);
   useEffect(() => setText(value), [value]);
   return (
@@ -248,7 +249,7 @@ function CaptionInput({ value, onSave }: { value: string; onSave: (v: string) =>
       className="input input--small"
       value={text}
       maxLength={CAPTION_MAX}
-      placeholder="e.g. 2025: The Sprouts (Ava & Ben)"
+      placeholder={placeholder ?? "e.g. 2025: The Sprouts (Ava & Ben)"}
       onChange={(e) => setText(e.target.value)}
       onBlur={() => text !== value && onSave(text)}
       onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()}
@@ -398,5 +399,96 @@ export function ActivityVideoPicker({ activity, view, run }: { activity: Activit
         ))}
       </select>
     </label>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Friendsmas memories: past photos for the welcome screen slideshow
+
+export function MemoriesPanel({ view, run }: { view: HostView; run: Run }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const memories = view.memories;
+  const room = MAX_MEMORIES - memories.length;
+
+  const upload = async (files: File[]) => {
+    const list = files.slice(0, room);
+    setError(files.length > room ? `Only ${room} more photos fit, so the rest were skipped.` : null);
+    setProgress({ done: 0, total: list.length });
+    const failed: string[] = [];
+    for (const [i, file] of list.entries()) {
+      try {
+        const imageId = await uploadQuizImage(file);
+        await run("memories.add", { imageId, caption: "" });
+      } catch {
+        failed.push(file.name);
+      }
+      setProgress({ done: i + 1, total: list.length });
+    }
+    setProgress(null);
+    if (failed.length) setError(`Couldn't add ${failed.join(", ")}. Try a JPEG or PNG.`);
+  };
+
+  return (
+    <section className="panel" aria-labelledby="memories-h">
+      <header className="panel__head">
+        <h2 id="memories-h" className="panel__title">
+          Friendsmas memories
+        </h2>
+        <span className="panel__meta">
+          {memories.length} of {MAX_MEMORIES} photos
+        </span>
+      </header>
+      <p className="host__muted">
+        Photos from past Friendsmases. The welcome screen takes turns between the menu and a slideshow of these. Captions are optional.
+      </p>
+      <div className="row__actions">
+        <input
+          ref={input}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={(e) => {
+            const files = [...(e.target.files ?? [])];
+            e.target.value = "";
+            if (files.length) upload(files);
+          }}
+        />
+        <button className="btn btn--small btn--secondary" disabled={!!progress || room <= 0} onClick={() => input.current?.click()}>
+          {progress ? `Uploading ${progress.done} of ${progress.total}…` : "Add photos"}
+        </button>
+      </div>
+      {error && <p className="form-error">{error}</p>}
+      {memories.length > 0 ? (
+        <ul className="plain-list memories-edit">
+          {memories.map((m, i) => (
+            <li key={m.id} className="winners-edit__row">
+              <img src={imageUrl(m.imageId, view.eventCode)} alt="" />
+              <CaptionInput value={m.caption} placeholder="e.g. The great pavlova collapse, 2024" onSave={(caption) => run("memories.update", { id: m.id, caption })} />
+              <span className="row__actions">
+                <button className="btn btn--small btn--ghost" disabled={i === 0} onClick={() => run("memories.move", { id: m.id, direction: "up" })} aria-label="Move up">
+                  ↑
+                </button>
+                <button
+                  className="btn btn--small btn--ghost"
+                  disabled={i === memories.length - 1}
+                  onClick={() => run("memories.move", { id: m.id, direction: "down" })}
+                  aria-label="Move down"
+                >
+                  ↓
+                </button>
+                <button className="btn btn--small btn--ghost" onClick={() => confirm("Remove this photo?") && run("memories.remove", { id: m.id })}>
+                  Remove
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="host__muted">No photos yet.</p>
+      )}
+    </section>
   );
 }

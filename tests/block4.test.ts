@@ -572,3 +572,18 @@ describe("the House", () => {
     expect(s.activities[0].house).toMatchObject({ houseScore: null, teamPoints: 4, settled: false });
   });
 });
+
+describe("Friendsmas memories", () => {
+  it("keeps a slideshow of past photos for the TV, and deletes pictures that are removed", () => {
+    const s = setup(1);
+    runAction(s, HOST, "memories.add", { imageId: "memory0001", caption: "2024 in the pool" }, T0);
+    runAction(s, HOST, "memories.add", { imageId: "memory0002" }, T0);
+    const [a, b] = s.memories;
+    runAction(s, HOST, "memories.move", { id: b.id, direction: "up" }, T0);
+    runAction(s, HOST, "memories.update", { id: b.id, caption: "Pavlova disaster, 2025" }, T0);
+    expect(stageView(s, T0).memories.map((m) => m.caption)).toEqual(["Pavlova disaster, 2025", "2024 in the pool"]);
+    expect(runAction(s, HOST, "memories.remove", { id: a.id }, T0).deleteImages).toEqual(["memory0001"]);
+    runAction(s, HOST, "event.startFresh", { confirm: "START FRESH" }, T0);
+    expect(s.memories).toHaveLength(1);
+  });
+});

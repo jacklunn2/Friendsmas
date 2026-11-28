@@ -6,6 +6,7 @@ import {
   AGENDA_MAX_ITEMS,
   AGENDA_TIME_MAX,
   CAPTION_MAX,
+  MAX_MEMORIES,
   MAX_PAST_WINNERS,
   VIDEO_MAX_BYTES,
   VIDEO_NAME_MAX,
@@ -107,7 +108,40 @@ function findWinner(s: ServerState, id: unknown) {
   return w;
 }
 
+function findMemory(s: ServerState, id: unknown) {
+  const m = s.memories.find((x) => x.id === id);
+  if (!m) throw new UserError("That photo no longer exists.");
+  return m;
+}
+
 export const showHost: Record<string, Handler> = {
+  /** Photos from past Friendsmases, for the welcome screen slideshow. */
+  "memories.add": (s, _a, p) => {
+    if (s.memories.length >= MAX_MEMORIES) throw new UserError(`The slideshow holds up to ${MAX_MEMORIES} photos.`);
+    const caption = str(p, "caption", { max: CAPTION_MAX, optional: true, label: "the caption" });
+    s.memories.push({ id: newId(s, "y"), imageId: imageId(p), caption });
+    return { audit: ["memories.add", "Added a Friendsmas memory"] };
+  },
+
+  "memories.update": (s, _a, p) => {
+    findMemory(s, p.id).caption = str(p, "caption", { max: CAPTION_MAX, optional: true, label: "the caption" });
+    return {};
+  },
+
+  "memories.move": (s, _a, p) => {
+    const i = s.memories.indexOf(findMemory(s, p.id));
+    const j = i + (p.direction === "up" ? -1 : 1);
+    if (j < 0 || j >= s.memories.length) return { noChange: true };
+    [s.memories[i], s.memories[j]] = [s.memories[j], s.memories[i]];
+    return {};
+  },
+
+  "memories.remove": (s, _a, p) => {
+    const m = findMemory(s, p.id);
+    s.memories = s.memories.filter((x) => x !== m);
+    return { audit: ["memories.remove", "Removed a Friendsmas memory"], deleteImages: [m.imageId] };
+  },
+
   "video.rename": (s, _a, p) => {
     const v = findVideo(s, p.id);
     v.name = str(p, "name", { max: VIDEO_NAME_MAX, label: "a name for the video" });

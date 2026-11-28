@@ -267,6 +267,14 @@ export interface PastWinner {
 }
 export const CAPTION_MAX = 80;
 export const MAX_PAST_WINNERS = 30;
+/** Photos from past Friendsmases, shown as a slideshow on the welcome screen. */
+export const MAX_MEMORIES = 80;
+
+export interface Memory {
+  id: string;
+  imageId: string;
+  caption: string;
+}
 
 /** The grand prize: the trophy photo and the hall of fame. */
 export interface PrizeView {
@@ -552,6 +560,8 @@ export interface MissionRevealRow {
 }
 
 export interface StageView extends PublicView {
+  /** Photos from past Friendsmases, for the welcome screen slideshow. */
+  memories: Memory[];
   /** Every mission and how it went, only while the missions reveal is on the TV. */
   missionsReveal: MissionRevealRow[] | null;
   role: "stage";
@@ -622,6 +632,7 @@ export interface HostView extends PublicView {
   house: Record<string, HostHouseView>;
   /** The House's total, including points not yet revealed. */
   liveHouseTotal: number;
+  memories: Memory[];
 }
 
 export type AnyView = PlayerView | StageView | HostView;

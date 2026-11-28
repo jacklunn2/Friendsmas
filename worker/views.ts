@@ -159,7 +159,7 @@ function resultsView(s: ServerState): ResultsView | null {
 }
 
 export function stageView(s: ServerState, now: number, canSpin = false): StageView {
-  return { ...base(s, { role: "stage" }, now), role: "stage", canSpin, menu: menuView(s), missionsReveal: missionsRevealView(s) };
+  return { ...base(s, { role: "stage" }, now), role: "stage", canSpin, menu: menuView(s), missionsReveal: missionsRevealView(s), memories: s.memories.map((m) => ({ ...m })) };
 }
 
 export function playerView(s: ServerState, playerId: string | null, now: number): PlayerView {
@@ -243,5 +243,6 @@ export function hostView(s: ServerState, audit: AuditEntry[], now: number): Host
     videos: s.videos.map((v) => ({ ...v })),
     house: hostHouseView(s),
     liveHouseTotal: houseTotal(liveEntries(s)),
+    memories: s.memories.map((m) => ({ ...m })),
   };
 }
