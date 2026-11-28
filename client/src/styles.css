@@ -5161,3 +5161,232 @@ img.member__emoji {
   background: linear-gradient(180deg, #fbe7a6, #d9a93e);
   box-shadow: 0 0.2vw 0.6vw rgba(0, 0, 0, 0.4);
 }
+
+/* Welcome screen: just "Friendsmas", the photos as the big centrepiece, the
+   menu on the left, the trophy and the join code on the right. */
+.welcome__wordmark {
+  font-size: 6vw;
+}
+.welcome.welcome--photos {
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.9fr) minmax(0, 0.62fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "head photos side"
+    "menu photos side"
+    "here photos side";
+  column-gap: 2vw;
+}
+.welcome--photos .welcome__wordmark {
+  font-size: 4.6vw;
+}
+.welcome--photos .welcome__side {
+  justify-content: space-between;
+}
+.welcome--photos .welcome__bottom {
+  margin-top: 0;
+  height: 100%;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 2vw;
+}
+.welcome--photos .welcome__trophy {
+  flex: 1 1 auto;
+  min-height: 0;
+  align-content: center;
+}
+.welcome--photos .welcome__trophy img {
+  max-height: 52vh;
+}
+.welcome--photos .welcome__join {
+  margin-left: 0;
+  align-items: center;
+}
+.welcome--photos .welcome__join-text {
+  text-align: center;
+}
+.welcome--photos .welcome__qr {
+  width: min(12vw, 24vh);
+}
+.welcome--photos .welcome__here {
+  flex-wrap: wrap;
+}
+.memories__mat {
+  padding: 0.9vw;
+}
+/* The photo fills the middle column as far as it can without cropping; the
+   frame hugs the photo whatever its shape. */
+.memories {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.memories__frame {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1vw;
+}
+.memories__stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  container-type: size;
+  display: grid;
+  place-items: center;
+}
+.memories__mat {
+  display: block;
+  min-height: 0;
+  max-width: 100%;
+}
+.memories__window {
+  width: auto;
+  height: auto;
+}
+.memories__photo {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 70vh;
+  max-width: calc(100cqw - 1.8vw);
+  max-height: calc(100cqh - 1.8vw);
+  object-fit: contain;
+}
+.memories--winner .memories__photo {
+  max-width: calc(100cqw - 2.2vw);
+  max-height: calc(100cqh - 2.2vw);
+}
+.memories__print {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9vw;
+  min-height: 0;
+  max-width: 100%;
+}
+.memories__stage.has-caption .memories__photo {
+  max-height: calc(100cqh - 1.8vw - 3.4vw);
+}
+.memories--winner .memories__stage.has-caption .memories__photo {
+  max-height: calc(100cqh - 2.2vw - 4.4vw);
+}
+
+/* Welcome screen with photos: a wider photo column, a single-column menu and
+   a compact row of faces so the photos get the room. */
+.welcome.welcome--photos {
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 2.25fr) minmax(0, 0.55fr);
+  column-gap: 2.2vw;
+}
+.welcome--photos .welcome__wordmark {
+  font-size: 4.2vw;
+}
+.welcome--photos .welcome__title {
+  font-size: 2vw;
+}
+.welcome--photos .welcome__groups {
+  columns: 1;
+}
+.welcome--photos .welcome__group {
+  margin-bottom: 0.9vw;
+}
+.welcome--photos .welcome__group-title {
+  font-size: 0.95vw;
+  margin-bottom: 0.35vw;
+}
+.welcome--photos .welcome__dishes {
+  gap: 0.35vw;
+}
+.welcome--photos .welcome__dish {
+  gap: 0.6vw;
+}
+.welcome--photos .welcome__dish-photo {
+  width: 2.2vw;
+  height: 2.2vw;
+  font-size: 1.2vw;
+  flex: none;
+}
+.welcome--photos .welcome__dish-name {
+  font-size: 1.15vw;
+}
+.welcome--photos .welcome__dish-by {
+  font-size: 0.85vw;
+}
+.welcome--photos .welcome__here {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5vw;
+}
+.welcome--photos .welcome__count {
+  font-size: 1.1vw;
+}
+.welcome--photos .welcome__faces {
+  gap: 0.35vw;
+}
+.welcome--photos .welcome__face-photo {
+  width: 2.4vw;
+  height: 2.4vw;
+  font-size: 1.3vw;
+  border-width: 0.12vw;
+}
+.welcome--photos .welcome__face-name {
+  display: none;
+}
+.welcome--photos .welcome__trophy img {
+  max-height: 48vh;
+}
+.welcome--photos .welcome__trophy figcaption {
+  font-size: 1.5vw;
+}
+.welcome--photos .welcome__qr {
+  width: min(11vw, 22vh);
+}
+.welcome--photos .welcome__join-text {
+  font-size: 1.3vw;
+}
+/* One line per dish on the welcome screen with photos: dish, then who's bringing it. */
+.welcome--photos .welcome__dish-text {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5vw;
+  min-width: 0;
+}
+.welcome--photos .welcome__dish-name {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.welcome--photos .welcome__dish-by {
+  flex: 0 10 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.welcome--photos .welcome__dish-photo {
+  width: 1.8vw;
+  height: 1.8vw;
+  font-size: 1vw;
+  box-shadow: 0 0 0 0.12vw var(--brass);
+}
+.welcome--photos .welcome__group {
+  margin-bottom: 0.6vw;
+}
+.welcome--photos .welcome__group-title {
+  margin-bottom: 0.2vw;
+}
+.welcome--photos .welcome__dishes {
+  gap: 0.2vw;
+}
+.welcome--photos .welcome__menu.is-dense .welcome__dish-name {
+  font-size: 1vw;
+}
+.welcome--photos .welcome__menu.is-dense .welcome__dish-photo {
+  width: 1.5vw;
+  height: 1.5vw;
+}
+.welcome--photos .memories__title {
+  text-align: center;
+  font-size: 2.8vw;
+  margin-bottom: 0.6vw;
+}

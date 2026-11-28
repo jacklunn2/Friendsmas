@@ -1,11 +1,8 @@
-// Control-room panels for the show's extras (Block 4): the welcome screen's
-// agenda, and later the grand prize, the hall of fame and videos.
+// Control-room panels for the show's extras (Block 4): the welcome screen,
+// memories, the grand prize, the hall of fame and videos.
 
 import { useEffect, useRef, useState } from "react";
 import {
-  AGENDA_ITEM_MAX,
-  AGENDA_MAX_ITEMS,
-  AGENDA_TIME_MAX,
   CAPTION_MAX,
   MAX_MEMORIES,
   MAX_PAST_WINNERS,
@@ -13,7 +10,6 @@ import {
   VIDEO_TOTAL_MAX_BYTES,
   imageUrl,
   type ActivityView,
-  type AgendaItem,
   type HostView,
 } from "../../../shared/types";
 import { uploadQuizImage } from "../image";
@@ -23,27 +19,6 @@ import { formatBytes, uploadVideo } from "../video";
 import type { Run } from "./Scoring";
 
 export function WelcomePanel({ view, run }: { view: HostView; run: Run }) {
-  const [rows, setRows] = useState<AgendaItem[]>(view.agenda);
-  const [dirty, setDirty] = useState(false);
-  // Pick up saves from elsewhere unless there are unsaved edits here.
-  useEffect(() => {
-    if (!dirty) setRows(view.agenda);
-  }, [view.agenda, dirty]);
-
-  const edit = (next: AgendaItem[]) => {
-    setRows(next);
-    setDirty(true);
-  };
-  const save = async () => {
-    const ok = await run("agenda.save", { items: rows }, "Agenda saved");
-    if (ok) setDirty(false);
-  };
-  const move = (i: number, d: number) => {
-    const next = rows.slice();
-    const [r] = next.splice(i, 1);
-    next.splice(i + d, 0, r);
-    edit(next);
-  };
   const drafting = view.draw.phase === "draft";
   const onTv = view.stage.screen === "welcome" && !drafting;
 
@@ -62,59 +37,8 @@ export function WelcomePanel({ view, run }: { view: HostView; run: Run }) {
         )}
       </header>
       <p className="host__muted">
-        The TV shows the menu from everyone's questionnaire, this agenda, the trophy and the QR code to join.
+        The TV shows "Friendsmas", the menu from everyone's questionnaire, the photo slideshow, the trophy and the QR code to join.
       </p>
-      <div className="agenda-edit">
-        {rows.map((r, i) => (
-          <div key={r.id || `new-${i}`} className="agenda-edit__row">
-            <input
-              className="input input--small agenda-edit__time"
-              aria-label={`Time for item ${i + 1}`}
-              placeholder="12:00"
-              maxLength={AGENDA_TIME_MAX}
-              value={r.time}
-              onChange={(e) => edit(rows.map((x, j) => (j === i ? { ...x, time: e.target.value } : x)))}
-            />
-            <input
-              className="input input--small"
-              aria-label={`Item ${i + 1}`}
-              placeholder="What's happening"
-              maxLength={AGENDA_ITEM_MAX}
-              value={r.item}
-              onChange={(e) => edit(rows.map((x, j) => (j === i ? { ...x, item: e.target.value } : x)))}
-            />
-            <span className="row__actions">
-              <button className="btn btn--small btn--ghost" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move up">
-                ↑
-              </button>
-              <button className="btn btn--small btn--ghost" disabled={i === rows.length - 1} onClick={() => move(i, 1)} aria-label="Move down">
-                ↓
-              </button>
-              <button className="btn btn--small btn--ghost" onClick={() => edit(rows.filter((_, j) => j !== i))} aria-label="Delete">
-                ✕
-              </button>
-            </span>
-          </div>
-        ))}
-        {!rows.length && <p className="host__muted">No agenda yet. Add the first item.</p>}
-      </div>
-      <div className="row__actions">
-        <button
-          className="btn btn--small btn--ghost"
-          disabled={rows.length >= AGENDA_MAX_ITEMS}
-          onClick={() => edit([...rows, { id: "", time: "", item: "" }])}
-        >
-          Add an item
-        </button>
-        <button className="btn btn--small btn--primary" disabled={!dirty} onClick={save}>
-          Save the agenda
-        </button>
-        {dirty && (
-          <button className="btn btn--small btn--ghost" onClick={() => setDirty(false)}>
-            Discard changes
-          </button>
-        )}
-      </div>
     </section>
   );
 }

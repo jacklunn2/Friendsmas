@@ -930,7 +930,7 @@ function StartFresh({ run }: { run: Run }) {
               secret mission, and test guests.
             </p>
             <p>
-              <strong>Kept:</strong> your activities, quiz and poll questions, the missions list, agenda, trophy, past winners, memories, videos and the
+              <strong>Kept:</strong> your activities, quiz and poll questions, the missions list, trophy, past winners, memories, videos and the
               guest link.
             </p>
             <label className="check">

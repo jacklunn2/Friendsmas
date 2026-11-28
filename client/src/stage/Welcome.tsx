@@ -1,5 +1,5 @@
-// The TV's welcome screen (Block 4): the menu everyone's bringing, the day's
-// agenda, the trophy, and the QR code to join. It updates live as guests
+// The TV's welcome screen (Block 4): the menu everyone's bringing, the photo
+// slideshow, the trophy, and the QR code to join. It updates live as guests
 // arrive and answer the questionnaire.
 
 import { useEffect, useMemo, useState } from "react";
@@ -52,16 +52,23 @@ function Slideshow({ slides, index, code }: { slides: Slide[]; index: number; co
   const next = slides[(index + 1) % slides.length];
   return (
     <div className={`memories${s.winner ? " memories--winner" : ""}`}>
-      <h2 key={s.winner ? "hof" : "mem"} className="welcome__title memories__title">
-        {s.winner ? "Hall of Fame" : "Friendsmas memories"}
-      </h2>
+      {/* Only past winners get a title; memories speak for themselves. */}
+      {s.winner && (
+        <h2 key={s.id} className="welcome__title memories__title">
+          Hall of Fame
+        </h2>
+      )}
       <figure key={s.id} className="memories__frame">
-        <div className="memories__mat">
-          <div className="memories__window">
-            <img className="memories__photo" src={imageUrl(s.imageId, code)} alt={s.caption || (s.winner ? "Past Friendsmas winners" : "A Friendsmas memory")} />
+        <div className={`memories__stage${s.caption ? " has-caption" : ""}`}>
+          <div className="memories__print">
+            <div className="memories__mat">
+              <div className="memories__window">
+                <img className="memories__photo" src={imageUrl(s.imageId, code)} alt={s.caption || (s.winner ? "Past Friendsmas winners" : "A Friendsmas memory")} />
+              </div>
+            </div>
+            {s.caption && <figcaption className="memories__caption">{s.caption}</figcaption>}
           </div>
         </div>
-        {s.caption && <figcaption className="memories__caption">{s.caption}</figcaption>}
       </figure>
       {/* The next photo, loading quietly so the change is instant. */}
       {slides.length > 1 && <img hidden alt="" src={imageUrl(next.imageId, code)} />}
@@ -93,7 +100,6 @@ export function Welcome({ view, trophyUrl }: { view: StageView; trophyUrl: strin
   return (
     <section className={`scene welcome${trophyUrl ? " welcome--trophy" : ""}${photos ? " welcome--photos" : ""}`}>
       <header className="welcome__head">
-        <p className="welcome__kicker">Welcome to</p>
         <Wordmark className="wordmark--stage welcome__wordmark" />
       </header>
 
@@ -137,19 +143,6 @@ export function Welcome({ view, trophyUrl }: { view: StageView; trophyUrl: strin
       </div>
 
       <aside className="welcome__side">
-        {view.agenda.length > 0 && (
-          <div className="welcome__agenda">
-            <h2 className="welcome__title">Today</h2>
-            <ol className="agenda">
-              {view.agenda.map((a) => (
-                <li key={a.id} className="agenda__row">
-                  <span className="agenda__time">{a.time}</span>
-                  <span className="agenda__item">{a.item}</span>
-                </li>
-              ))}
-            </ol>
-          </div>
-        )}
         <div className="welcome__bottom">
           {trophyUrl && (
             <figure className="welcome__trophy">
