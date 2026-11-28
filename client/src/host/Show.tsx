@@ -158,6 +158,7 @@ export function VideosPanel({ view, run }: { view: HostView; run: Run }) {
   const [error, setError] = useState<string | null>(null);
   const used = view.videos.reduce((n, v) => n + v.size, 0);
   const usedBy = (id: string) => view.activities.filter((a) => a.videoId === id).map((a) => a.name);
+  const linkedTo = (id: string) => view.activities.filter((a) => a.clips.includes(id)).map((a) => a.name);
 
   const choose = async (file: File | undefined) => {
     if (!file) return;
@@ -183,8 +184,8 @@ export function VideosPanel({ view, run }: { view: HostView; run: Run }) {
         </span>
       </header>
       <p className="host__muted">
-        Clips up to {Math.round(VIDEO_MAX_BYTES / 1024 / 1024)} MB each (MP4 works best). Attach one to an activity and it plays on the TV, with sound, when the
-        activity starts.
+        Clips up to {Math.round(VIDEO_MAX_BYTES / 1024 / 1024)} MB each (MP4 works best). In an activity, pick an opening video to play by itself when
+        the activity goes on the TV, or link clips that you play with a button when you reach that point. They play full screen, with sound.
       </p>
       <div className="row__actions">
         <input ref={input} type="file" accept="video/mp4,video/webm,video/quicktime,.mov" hidden onChange={(e) => choose(e.target.files?.[0]).then(() => (e.target.value = ""))} />
@@ -205,6 +206,7 @@ export function VideosPanel({ view, run }: { view: HostView; run: Run }) {
                   · {formatBytes(v.size)}
                   {v.durationMs ? ` · ${formatClock(v.durationMs)}` : ""}
                   {usedBy(v.id).length ? ` · opens ${usedBy(v.id).join(", ")}` : ""}
+                  {linkedTo(v.id).length ? ` · linked to ${linkedTo(v.id).join(", ")}` : ""}
                 </span>
               </span>
               <span className="row__actions">
@@ -272,25 +274,94 @@ export function VideoBar({ view, run, serverNow }: { view: HostView; run: Run; s
   );
 }
 
-/** Chooses the clip that opens an activity. */
+/**
+ * An activity's videos: the opening clip (plays by itself when the activity
+ * goes on the TV) and linked clips the host plays at the right moment.
+ */
 export function ActivityVideoPicker({ activity, view, run }: { activity: ActivityView; view: HostView; run: Run }) {
-  if (!view.videos.length && !activity.videoId) return null;
+  const clips = activity.clips.map((id) => view.videos.find((v) => v.id === id)).filter((v): v is NonNullable<typeof v> => !!v);
+  if (!view.videos.length && !activity.videoId && !clips.length) return null;
+  const linkable = view.videos.filter((v) => !activity.clips.includes(v.id));
+  const playing = view.video;
   return (
-    <label className="field field--inline video-pick">
-      <span className="field__label">Opening video</span>
-      <select
-        className="input input--small"
-        value={activity.videoId ?? ""}
-        onChange={(e) => run("activity.video", { activityId: activity.id, videoId: e.target.value || null })}
-      >
-        <option value="">None</option>
-        {view.videos.map((v) => (
-          <option key={v.id} value={v.id}>
-            {v.name}
-          </option>
-        ))}
-      </select>
-    </label>
+    <div className="activity-videos">
+      <label className="field field--inline video-pick">
+        <span className="field__label">Opening video</span>
+        <select
+          className="input input--small"
+          value={activity.videoId ?? ""}
+          onChange={(e) => run("activity.video", { activityId: activity.id, videoId: e.target.value || null })}
+        >
+          <option value="">None</option>
+          {view.videos.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {clips.length > 0 && (
+        <ul className="plain-list activity-clips" aria-label={`Clips for ${activity.name}`}>
+          {clips.map((v, i) => {
+            const onNow = playing?.videoId === v.id;
+            return (
+              <li key={v.id} className="activity-clips__row">
+                <button
+                  className={`btn btn--small ${onNow ? "btn--on" : "btn--primary"}`}
+                  onClick={() => run("video.play", { videoId: v.id, activityId: activity.id }, `${v.name} is playing on the TV`)}
+                >
+                  {onNow ? `On the TV now: “${v.name}”` : `▶ Play “${v.name}” on the TV`}
+                </button>
+                {v.durationMs ? <span className="host__muted">{formatClock(v.durationMs)}</span> : null}
+                <span className="row__actions activity-clips__tools">
+                  <button
+                    className="btn btn--small btn--ghost"
+                    disabled={i === 0}
+                    aria-label={`Move ${v.name} up`}
+                    onClick={() => run("activity.clip.move", { activityId: activity.id, videoId: v.id, direction: "up" })}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    className="btn btn--small btn--ghost"
+                    disabled={i === clips.length - 1}
+                    aria-label={`Move ${v.name} down`}
+                    onClick={() => run("activity.clip.move", { activityId: activity.id, videoId: v.id, direction: "down" })}
+                  >
+                    ↓
+                  </button>
+                  <button
+                    className="btn btn--small btn--ghost"
+                    onClick={() => run("activity.clip.remove", { activityId: activity.id, videoId: v.id })}
+                  >
+                    Unlink
+                  </button>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {linkable.length > 0 && (
+        <label className="field field--inline video-pick">
+          <span className="field__label">Link a clip to play during this activity</span>
+          <select
+            className="input input--small"
+            value=""
+            onChange={(e) => e.target.value && run("activity.clip.add", { activityId: activity.id, videoId: e.target.value })}
+          >
+            <option value="">Choose a video…</option>
+            {linkable.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+    </div>
   );
 }
 

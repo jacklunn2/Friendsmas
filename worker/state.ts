@@ -142,6 +142,8 @@ export interface Activity {
   foolBonus?: number;
   polls?: PollQuestion[];
   videoId?: string | null;
+  /** Clips the host plays during the activity, in order. */
+  clips?: string[];
   house?: HouseConfig | null;
 }
 

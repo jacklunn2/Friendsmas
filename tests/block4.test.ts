@@ -491,6 +491,29 @@ describe("videos", () => {
     expect(s.video).toBeNull();
   });
 
+  it("links clips to an activity for the host to play at the right moment", () => {
+    const s = setup(2);
+    drawTeams(s);
+    const throwClip = withClip(s, "throw");
+    const measure = withClip(s, "measure");
+    const { id } = runAction(s, HOST, "activity.create", { name: "Frisbee", kind: "team", scoring: "judged" }, T0).data as { id: string };
+    runAction(s, HOST, "activity.clip.add", { activityId: id, videoId: throwClip }, T0);
+    runAction(s, HOST, "activity.clip.add", { activityId: id, videoId: measure }, T0);
+    expect(runAction(s, HOST, "activity.clip.add", { activityId: id, videoId: measure }, T0).noChange).toBe(true);
+    expect(hostView(s, [], T0).activities[0].clips).toEqual([throwClip, measure]);
+    // Linked clips don't play by themselves when the activity goes on the TV.
+    runAction(s, HOST, "stage.show", { screen: "activity", activityId: id }, T0);
+    expect(s.video).toBeNull();
+    runAction(s, HOST, "video.play", { videoId: throwClip, activityId: id }, T0 + 50);
+    expect(stageView(s, T0).video).toMatchObject({ videoId: throwClip, activityId: id, playing: true });
+    expect(s.stage).toMatchObject({ screen: "activity", activityId: id });
+    runAction(s, HOST, "activity.clip.move", { activityId: id, videoId: measure, direction: "up" }, T0);
+    expect(hostView(s, [], T0).activities[0].clips).toEqual([measure, throwClip]);
+    runAction(s, HOST, "activity.clip.remove", { activityId: id, videoId: measure }, T0);
+    runAction(s, HOST, "video.delete", { id: throwClip }, T0);
+    expect(hostView(s, [], T0).activities[0].clips).toEqual([]);
+  });
+
   it("deletes a clip everywhere it's used", () => {
     const s = setup(1);
     const vid = withClip(s);

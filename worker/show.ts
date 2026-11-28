@@ -6,6 +6,7 @@ import {
   AGENDA_MAX_ITEMS,
   AGENDA_TIME_MAX,
   CAPTION_MAX,
+  MAX_ACTIVITY_CLIPS,
   MAX_MEMORIES,
   MAX_PAST_WINNERS,
   VIDEO_MAX_BYTES,
@@ -70,6 +71,12 @@ function findVideo(s: ServerState, id: unknown): VideoInfo {
   const v = s.videos.find((x) => x.id === id);
   if (!v) throw new UserError("That video no longer exists.");
   return v;
+}
+
+function findActivity(s: ServerState, id: unknown) {
+  const a = s.activities.find((x) => x.id === id);
+  if (!a) throw new UserError("That activity no longer exists.");
+  return a;
 }
 
 function play(s: ServerState, videoId: string, activityId: string | null, now: number) {
@@ -151,23 +158,54 @@ export const showHost: Record<string, Handler> = {
   "video.delete": (s, _a, p) => {
     const v = findVideo(s, p.id);
     if (s.video?.videoId === v.id) s.video = null;
-    for (const a of s.activities) if (a.videoId === v.id) a.videoId = null;
+    for (const a of s.activities) {
+      if (a.videoId === v.id) a.videoId = null;
+      if (a.clips) a.clips = a.clips.filter((id) => id !== v.id);
+    }
     s.videos = s.videos.filter((x) => x !== v);
     return { audit: ["video.delete", v.name], deleteVideos: [v.id] };
   },
 
   /** Attaches a clip to an activity (null detaches it). */
   "activity.video": (s, _a, p) => {
-    const a = s.activities.find((x) => x.id === p.activityId);
-    if (!a) throw new UserError("That activity no longer exists.");
+    const a = findActivity(s, p.activityId);
     a.videoId = p.videoId === null ? null : findVideo(s, p.videoId).id;
     return { audit: ["activity.video", a.videoId ? `${a.name} opens with ${findVideo(s, a.videoId).name}` : `${a.name}: no video`] };
   },
 
-  /** Plays any clip on the TV now. */
+  /** Links a clip to an activity, to play when the host reaches that point. */
+  "activity.clip.add": (s, _a, p) => {
+    const a = findActivity(s, p.activityId);
+    const v = findVideo(s, p.videoId);
+    a.clips ??= [];
+    if (a.clips.includes(v.id)) return { noChange: true };
+    if (a.clips.length >= MAX_ACTIVITY_CLIPS) throw new UserError(`An activity can have up to ${MAX_ACTIVITY_CLIPS} clips.`);
+    a.clips.push(v.id);
+    return { audit: ["activity.clip.add", `${v.name} linked to ${a.name}`] };
+  },
+
+  "activity.clip.remove": (s, _a, p) => {
+    const a = findActivity(s, p.activityId);
+    if (!a.clips?.includes(p.videoId as string)) return { noChange: true };
+    a.clips = a.clips.filter((id) => id !== p.videoId);
+    return { audit: ["activity.clip.remove", `A clip was unlinked from ${a.name}`] };
+  },
+
+  "activity.clip.move": (s, _a, p) => {
+    const a = findActivity(s, p.activityId);
+    const list = a.clips ?? [];
+    const i = list.indexOf(p.videoId as string);
+    const j = i + (p.direction === "up" ? -1 : 1);
+    if (i < 0 || j < 0 || j >= list.length) return { noChange: true };
+    [list[i], list[j]] = [list[j], list[i]];
+    return {};
+  },
+
+  /** Plays any clip on the TV now, over whatever is showing. */
   "video.play": (s, _a, p, now) => {
     const v = findVideo(s, p.videoId);
-    play(s, v.id, null, now);
+    const activityId = p.activityId == null ? null : findActivity(s, p.activityId).id;
+    play(s, v.id, activityId, now);
     return { audit: ["video.play", `${v.name} on the TV`] };
   },
 

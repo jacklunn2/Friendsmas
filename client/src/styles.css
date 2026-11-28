@@ -5413,3 +5413,23 @@ img.member__emoji {
   resize: vertical;
   font: inherit;
 }
+
+/* Control room: an activity's linked clips */
+.activity-videos {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.activity-clips {
+  display: grid;
+  gap: 0.4rem;
+}
+.activity-clips__row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.activity-clips__tools {
+  margin-left: auto;
+}

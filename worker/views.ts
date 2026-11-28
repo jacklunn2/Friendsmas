@@ -125,6 +125,7 @@ function activityView(a: Activity): ActivityView {
     pollKind: a.pollKind ?? "general",
     foolBonus: a.foolBonus ?? 0,
     videoId: a.videoId ?? null,
+    clips: [...(a.clips ?? [])],
     house: a.house
       ? { direction: a.house.direction, teamPoints: a.house.teamPoints, housePoints: a.house.housePoints, locked: a.house.houseScore !== null, settled: a.house.settled }
       : null,

@@ -100,6 +100,8 @@ export interface ActivityView {
   foolBonus: number;
   /** A clip that plays on the TV, with sound, when the activity starts. */
   videoId: string | null;
+  /** Clips linked to the activity, played by the host when they reach that point. */
+  clips: string[];
   /** "Beat the House" settings. The House's score itself is never sent to the TV or phones before the reveal. */
   house: HouseSettingsView | null;
 }
@@ -312,6 +314,8 @@ export interface VideoPlayback {
   /** Changes on every play/restart, so the TV knows to start again. */
   seq: number;
 }
+
+export const MAX_ACTIVITY_CLIPS = 10;
 
 export function videoUrl(id: string, eventCode: string): string {
   return `/api/video/${id}?c=${eventCode}`;
