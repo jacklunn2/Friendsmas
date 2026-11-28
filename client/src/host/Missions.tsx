@@ -57,7 +57,9 @@ export function MissionsPanel({ view, run }: { view: HostView; run: Run }) {
       </div>
       {without.length > free.length && (
         <p className="callout callout--warn">
-          {without.length} guests are waiting for a mission but only {free.length} are unused. Add {without.length - free.length} more.
+          {without.length === 1 ? "1 guest is" : `${without.length} guests are`} waiting for a mission but{" "}
+          {free.length === 0 ? "none are" : free.length === 1 ? "only 1 is" : `only ${free.length} are`} unused. Add {without.length - free.length} more to the
+          list.
         </p>
       )}
 
@@ -239,7 +241,7 @@ function MissionList({ view, run }: { view: HostView; run: Run }) {
   return (
     <div className="mission-list-box">
       <h3 className="callout__title">
-        Your missions ({m.list.length}){m.list.length > 0 && <span className="host__muted"> · {m.list.length - held.size} not handed out yet</span>}
+        Your missions ({m.list.length})
       </h3>
       {!m.list.length && <p className="host__muted">No missions yet. Write some below.</p>}
       <ul className="plain-list mission-list">

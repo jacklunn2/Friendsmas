@@ -55,7 +55,6 @@ export function QuestionnairePanel({ view, run }: { view: HostView; run: Run }) 
         </div>
       )}
 
-      <h3 className="callout__title">The food</h3>
       {view.foodWarnings.length > 0 && (
         <ul className="warn-list">
           {view.foodWarnings.map((w) => (
@@ -63,26 +62,6 @@ export function QuestionnairePanel({ view, run }: { view: HostView; run: Run }) 
           ))}
         </ul>
       )}
-      <div className="food-groups">
-        {DISH_CATEGORIES.map((c) => {
-          const items = done.filter((p) => answers[p.id].category === c);
-          if (!items.length) return null;
-          return (
-            <div key={c} className="food-group">
-              <h4>{DISH_CATEGORY_LABEL[c]}</h4>
-              <ul>
-                {items.map((p) => (
-                  <li key={p.id} className={dupIds.has(p.id) ? "food-group__dup" : undefined}>
-                    <Avatar player={p} /> {answers[p.id].dish}
-                    {answers[p.id].dietary && <span className="host__muted">({answers[p.id].dietary})</span>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          );
-        })}
-        {!done.length && <p className="host__muted">Nobody has answered yet.</p>}
-      </div>
 
       <div className="row">
         <h3 className="callout__title">Everyone's answers</h3>
@@ -112,7 +91,7 @@ export function QuestionnairePanel({ view, run }: { view: HostView; run: Run }) 
                 <td>
                   {a ? (
                     <>
-                      {a.dish} <span className="tag">{DISH_CATEGORY_LABEL[a.category]}</span>
+                      <span className={dupIds.has(p.id) ? "food-group__dup" : undefined}>{a.dish}</span> <span className="tag">{DISH_CATEGORY_LABEL[a.category]}</span>
                       {a.dietary && <div className="host__muted">{a.dietary}</div>}
                     </>
                   ) : (

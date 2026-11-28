@@ -1,5 +1,5 @@
-// Control-room panels for the show's extras (Block 4): the welcome screen,
-// memories, the grand prize, the hall of fame and videos.
+// Control-room panels for the show's extras (Block 4): memories, the grand
+// prize, the hall of fame and videos.
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -17,31 +17,6 @@ import { useTicker } from "../net";
 import { formatClock } from "../ui";
 import { formatBytes, uploadVideo } from "../video";
 import type { Run } from "./Scoring";
-
-export function WelcomePanel({ view, run }: { view: HostView; run: Run }) {
-  const drafting = view.draw.phase === "draft";
-  const onTv = view.stage.screen === "welcome" && !drafting;
-
-  return (
-    <section className="panel" aria-labelledby="welcome-h">
-      <header className="panel__head">
-        <h2 id="welcome-h" className="panel__title">
-          Welcome screen
-        </h2>
-        {drafting ? (
-          <span className="panel__meta">On the TV until the draw</span>
-        ) : (
-          <button className="btn btn--small btn--secondary" disabled={onTv} onClick={() => run("stage.show", { screen: "welcome" })}>
-            {onTv ? "On the TV" : "Show on the TV"}
-          </button>
-        )}
-      </header>
-      <p className="host__muted">
-        The TV shows "Friendsmas", the menu from everyone's questionnaire, the photo slideshow, the trophy and the QR code to join.
-      </p>
-    </section>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // The grand prize and the hall of fame
@@ -358,7 +333,7 @@ export function MemoriesPanel({ view, run }: { view: HostView; run: Run }) {
         </span>
       </header>
       <p className="host__muted">
-        Photos from past Friendsmases. The welcome screen takes turns between the menu and a slideshow of these. Captions are optional.
+        Photos from past Friendsmases. They play as a slideshow in the middle of the welcome screen. Captions are optional.
       </p>
       <div className="row__actions">
         <input
