@@ -675,6 +675,8 @@ export interface HostView extends PublicView {
   runSheet: string[];
   /** The names teams pick from in face mash questions. */
   mashNames: string[];
+  /** Pairs of guests the draw keeps on different teams. */
+  keepApart: [string, string][];
   roster: HostPlayer[];
   audit: AuditEntry[];
   spinCooldownUntil: number | null;

@@ -15,7 +15,7 @@ import type {
   StageView,
 } from "../shared/types";
 import { DEFAULT_MASH_NAMES, HOUSE_ID } from "../shared/types";
-import { revealedIds, spinCooldownUntil } from "./logic";
+import { livePairs, revealedIds, spinCooldownUntil } from "./logic";
 import { foodWarnings, menuView, questionnaireView } from "./guests";
 import { hostMissionsView, missionsRevealView, myMissionView } from "./missions";
 import { hostPollVotes, isMyFact, myPollVote, pollQuestionView, pollView } from "./polls";
@@ -207,6 +207,7 @@ export function hostView(s: ServerState, audit: AuditEntry[], now: number): Host
     role: "host",
     runSheet: [...(s.runSheet ?? [])],
     mashNames: [...(s.mashNames ?? DEFAULT_MASH_NAMES)],
+    keepApart: livePairs(s).map(([a, b]) => [a, b] as [string, string]),
     roster: s.players.map((p) => ({
       ...publicPlayer(p, revealed),
       hasDevice: !!p.token,

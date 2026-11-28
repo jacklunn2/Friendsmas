@@ -128,6 +128,18 @@ export function buildEvents(teams: ServerTeam[]): RevealEvent[] {
   return events;
 }
 
+/** Keep-apart pairs whose guests are both still on the guest list. */
+export function livePairs(s: ServerState): [string, string][] {
+  return (s.keepApart ?? []).filter(([a, b]) => s.players.some((p) => p.id === a) && s.players.some((p) => p.id === b));
+}
+
+/** True if a group of guests has no keep-apart pair in it. */
+function apartOk(pairs: [string, string][], ids: string[]): boolean {
+  return !pairs.some(([a, b]) => ids.includes(a) && ids.includes(b));
+}
+
+const MAX_SHUFFLES = 20_000;
+
 function lockDraw(s: ServerState, now: number): ActionResult {
   requireDraft(s, "Locking");
   const eligible = eligibleForDraw(s);
@@ -135,8 +147,19 @@ function lockDraw(s: ServerState, now: number): ActionResult {
   if (eligible.length < 2) throw new UserError("At least two guests need to have joined.");
   if (!sizes) throw new UserError(`There are ${eligible.length} guests. Choose how to handle the odd number first.`);
 
-  const order = shuffle(eligible.map((p) => p.id));
-  const shuffledSizes = shuffle(sizes);
+  // Shuffle until no keep-apart pair shares a team. Every arrangement that keeps
+  // them apart is equally likely; it's still a fair random draw.
+  const pairs = livePairs(s);
+  let order: string[] = [];
+  let shuffledSizes: number[] = [];
+  let found = false;
+  for (let attempt = 0; attempt < MAX_SHUFFLES && !found; attempt++) {
+    order = shuffle(eligible.map((p) => p.id));
+    shuffledSizes = shuffle(sizes);
+    let at = 0;
+    found = shuffledSizes.every((size) => apartOk(pairs, order.slice(at, (at += size))));
+  }
+  if (!found) throw new UserError("The draw can't keep everyone on the keep-apart list on different teams. Remove a pair and try again.");
   const teams: ServerTeam[] = [];
   let cursor = 0;
   shuffledSizes.forEach((size, i) => {
@@ -411,6 +434,24 @@ const host: Record<string, Handler> = {
   },
 
   "draw.lock": (s, _a, _p, now) => lockDraw(s, now),
+
+  /** Two guests who must never be drawn into the same team. */
+  "draw.apart.add": (s, _a, p) => {
+    const a = findPlayer(s, p.a);
+    const b = findPlayer(s, p.b);
+    if (a.id === b.id) throw new UserError("Choose two different guests.");
+    s.keepApart = livePairs(s);
+    if (s.keepApart.some(([x, y]) => (x === a.id && y === b.id) || (x === b.id && y === a.id))) return { noChange: true };
+    if (s.keepApart.length >= 100) throw new UserError("That's a lot of pairs. Remove some first.");
+    s.keepApart.push([a.id, b.id]);
+    return { audit: ["draw.apart.add", `${a.name} and ${b.name} will be on different teams`] };
+  },
+
+  "draw.apart.remove": (s, _a, p) => {
+    const before = (s.keepApart ?? []).length;
+    s.keepApart = (s.keepApart ?? []).filter(([x, y]) => !((x === p.a && y === p.b) || (x === p.b && y === p.a)));
+    return before === s.keepApart.length ? { noChange: true } : { audit: ["draw.apart.remove", "A keep-apart pair was removed"] };
+  },
   "draw.spin": (s, _a, p, now) => spin(s, p, now),
   "draw.skip": (s, _a, _p, now) => skipDraw(s, now),
   "draw.reset": (s, _a, p) => resetDraw(s, p),
@@ -424,8 +465,12 @@ const host: Record<string, Handler> = {
     if (pl.house) throw new UserError(`${pl.name} is one of the hosts (the House). Make them a player first.`);
     let team: ServerTeam;
     if (p.teamId === "random") {
-      const smallest = Math.min(...s.teams.map((t) => t.memberIds.length));
-      team = pick(s.teams.filter((t) => t.memberIds.length === smallest));
+      // The smallest team that keeps them apart from anyone on their keep-apart list.
+      const pairs = livePairs(s);
+      const allowed = s.teams.filter((t) => apartOk(pairs, [...t.memberIds, pl.id]));
+      if (!allowed.length) throw new UserError(`Every team has someone ${pl.name} is kept apart from. Choose a team for them.`);
+      const smallest = Math.min(...allowed.map((t) => t.memberIds.length));
+      team = pick(allowed.filter((t) => t.memberIds.length === smallest));
     } else {
       team = findTeam(s, p.teamId);
     }

@@ -5704,3 +5704,25 @@ img.member__emoji {
   border-radius: 50%;
   flex: none;
 }
+
+/* Control room: keep-apart pairs for the draw */
+.keep-apart__list {
+  display: grid;
+  gap: 0.3rem;
+  margin-bottom: 0.5rem;
+}
+.keep-apart__pair {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--spruce-line);
+  border-radius: 8px;
+}
+.keep-apart__add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}

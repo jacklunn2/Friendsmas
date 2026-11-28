@@ -547,7 +547,8 @@ function RosterRow({ player: p, team, run }: { player: HostPlayer; team?: Public
 // Draw set-up (before locking)
 
 function DrawSetup({ view, run }: { view: HostView; run: Run }) {
-  const eligible = view.roster.filter((p) => p.status === "joined");
+  // The hosts (the House) aren't drawn.
+  const eligible = view.roster.filter((p) => p.status === "joined" && !p.house);
   const notJoined = view.roster.filter((p) => p.status === "expected");
   const n = eligible.length;
   const odd = n % 2 === 1;
@@ -599,6 +600,8 @@ function DrawSetup({ view, run }: { view: HostView; run: Run }) {
         />
       </fieldset>
 
+      <KeepApart view={view} run={run} />
+
       {notJoined.length > 0 && (
         <div className="callout callout--warn">
           <h3 className="callout__title">Not joined yet</h3>
@@ -607,6 +610,67 @@ function DrawSetup({ view, run }: { view: HostView; run: Run }) {
         </div>
       )}
     </section>
+  );
+}
+
+/** Pairs the draw keeps on different teams: couples, exes. */
+function KeepApart({ view, run }: { view: HostView; run: Run }) {
+  const guests = view.roster.filter((p) => !p.house && p.status !== "pending").sort((a, b) => a.name.localeCompare(b.name));
+  const names = new Map(view.roster.map((p) => [p.id, p.name]));
+  const [a, setA] = useState("");
+  const [b, setB] = useState("");
+  return (
+    <fieldset className="choice keep-apart">
+      <legend className="choice__legend">Keep apart</legend>
+      <p className="host__muted">Couples, exes, anyone who shouldn't be on a team together. The draw makes sure each pair ends up on different teams.</p>
+      {view.keepApart.length > 0 && (
+        <ul className="plain-list keep-apart__list">
+          {view.keepApart.map(([x, y]) => (
+            <li key={`${x}-${y}`} className="keep-apart__pair">
+              <span>
+                {names.get(x)} <span className="host__muted">and</span> {names.get(y)}
+              </span>
+              <button className="btn btn--small btn--ghost" aria-label={`Let ${names.get(x)} and ${names.get(y)} be on a team`} onClick={() => run("draw.apart.remove", { a: x, b: y })}>
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form
+        className="inline-form__row keep-apart__add"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (await run("draw.apart.add", { a, b })) {
+            setA("");
+            setB("");
+          }
+        }}
+      >
+        <select className="input input--small" value={a} onChange={(e) => setA(e.target.value)} aria-label="First guest">
+          <option value="">Choose a guest…</option>
+          {guests.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+        <span className="host__muted">and</span>
+        <select className="input input--small" value={b} onChange={(e) => setB(e.target.value)} aria-label="Second guest">
+          <option value="">Choose a guest…</option>
+          {guests
+            .filter((p) => p.id !== a)
+            .map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+        </select>
+        <button className="btn btn--small btn--secondary" disabled={!a || !b}>
+          Keep apart
+        </button>
+      </form>
+    </fieldset>
   );
 }
 

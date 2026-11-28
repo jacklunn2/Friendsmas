@@ -253,6 +253,8 @@ export interface ServerState {
   runSheet?: string[];
   /** The names teams pick from in face mash questions. */
   mashNames?: string[];
+  /** Pairs of guests who must never be drawn into the same team (couples, exes). */
+  keepApart?: [string, string][];
 }
 
 export interface MissionAssignment {

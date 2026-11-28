@@ -151,6 +151,49 @@ describe("the hosts are the House", () => {
   });
 });
 
+describe("keeping couples and exes apart", () => {
+  it("never draws a keep-apart pair into the same team", () => {
+    for (let run = 0; run < 40; run++) {
+      const s = setup(8);
+      const [a, b, c, d, e, f] = s.players;
+      runAction(s, HOST, "draw.apart.add", { a: a.id, b: b.id }, T0);
+      runAction(s, HOST, "draw.apart.add", { a: c.id, b: d.id }, T0);
+      runAction(s, HOST, "draw.apart.add", { a: e.id, b: f.id }, T0);
+      runAction(s, HOST, "draw.apart.add", { a: a.id, b: c.id }, T0);
+      drawTeams(s);
+      for (const [x, y] of [[a, b], [c, d], [e, f], [a, c]]) expect(x.teamId).not.toBe(y.teamId);
+    }
+  });
+
+  it("lists pairs for the host, ignores repeats, and says when it can't be done", () => {
+    const s = setup(2);
+    const [a, b] = s.players;
+    runAction(s, HOST, "draw.apart.add", { a: a.id, b: b.id }, T0);
+    expect(runAction(s, HOST, "draw.apart.add", { a: b.id, b: a.id }, T0).noChange).toBe(true);
+    expect(hostView(s, [], T0).keepApart).toEqual([[a.id, b.id]]);
+    expect(() => runAction(s, HOST, "draw.apart.add", { a: a.id, b: a.id }, T0)).toThrow(/two different/);
+    // Two guests make one pair, and they can't be apart.
+    runAction(s, HOST, "draw.options", { revealMode: "finale" }, T0);
+    expect(() => runAction(s, HOST, "draw.lock", {}, T0)).toThrow(/keep-apart/);
+    runAction(s, HOST, "draw.apart.remove", { a: b.id, b: a.id }, T0);
+    expect(hostView(s, [], T0).keepApart).toEqual([]);
+    runAction(s, HOST, "draw.lock", {}, T0);
+  });
+
+  it("adds a late arrival to a team without anyone they're kept apart from", () => {
+    const s = setup(5);
+    const late = s.players[4];
+    runAction(s, HOST, "guest.exclude", { id: late.id }, T0);
+    drawTeams(s);
+    runAction(s, HOST, "guest.include", { id: late.id }, T0);
+    // Keep them apart from someone on each team but one.
+    const [t1, t2] = s.teams;
+    runAction(s, HOST, "draw.apart.add", { a: late.id, b: t1.memberIds[0] }, T0);
+    runAction(s, HOST, "team.add", { playerId: late.id, teamId: "random" }, T0);
+    expect(late.teamId).toBe(t2.id);
+  });
+});
+
 describe("the welcome screen", () => {
   it("shows the host's agenda, keeping row ids and dropping blank rows", () => {
     const s = setup(2);
