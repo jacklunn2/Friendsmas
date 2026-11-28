@@ -15,7 +15,9 @@ import {
   formatNumber,
   teamDisplayName,
   VOTE_TYPES,
+  MAX_MASH_GUESTS,
   type HostQuizAnswer,
+  type MashAnswer,
   type PollOptionsKind,
   type PollOptionView,
   type QuestionType,
@@ -119,6 +121,31 @@ function markContext(s: ServerState, q: Question, answers: Record<string, QuizAn
 }
 
 // ---------------------------------------------------------------------------
+// Face mash: guests picked from a list, in any order, plus a typed celebrity
+
+/** Reads a stored face mash answer. */
+export function parseMash(value: string): MashAnswer {
+  try {
+    const v = JSON.parse(value) as Partial<MashAnswer>;
+    return {
+      guests: Array.isArray(v.guests) ? v.guests.filter((g): g is string => typeof g === "string") : [],
+      celebrity: typeof v.celebrity === "string" ? v.celebrity : "",
+    };
+  } catch {
+    return { guests: [], celebrity: "" };
+  }
+}
+
+/** How many of the guests are right (any order, each counted once), and how the celebrity was marked. */
+export function mashMark(q: Question, value: string): { guestsRight: number; celebrity: "correct" | "close" | "wrong" | null } {
+  const a = parseMash(value);
+  const want = new Set(q.pickIds ?? []);
+  const guestsRight = new Set(a.guests.filter((g) => want.has(g))).size;
+  const celebrity = q.accepted.length ? autoMark({ ...q, type: "text" }, a.celebrity, null) : null;
+  return { guestsRight, celebrity };
+}
+
+// ---------------------------------------------------------------------------
 // Marking
 
 /** Lower case, no punctuation or accents, no leading "the/a/an". */
@@ -191,8 +218,22 @@ export function markAnswers(s: ServerState, quiz: Activity, q: Question): HostQu
   const ctx = markContext(s, q, answers);
   const overrides = s.quiz.overrides[q.id] ?? {};
   const teamOf = (answererId: string) => (quiz.kind === "team" ? answererId : (s.players.find((p) => p.id === answererId)?.teamId ?? null));
+  const base = pointsFor(quiz, q);
   return Object.entries(answers)
     .map(([answererId, a]) => {
+      if (q.type === "facemash") {
+        // The host's override decides the celebrity; picked guests can't be misspelled.
+        const m = mashMark(q, a.value);
+        const override = answererId in overrides ? overrides[answererId] : null;
+        const celebRight = m.celebrity === null ? null : (override ?? m.celebrity === "correct");
+        const guests = q.pickIds?.length ?? 0;
+        const total = guests + (m.celebrity === null ? 0 : 1);
+        const right = m.guestsRight + (celebRight ? 1 : 0);
+        const points = right * base + (total > 0 && right === total ? (q.bonus ?? 0) : 0);
+        const auto: "correct" | "close" | "wrong" = m.celebrity === "close" ? "close" : right === total ? "correct" : "wrong";
+        const detail = `${m.guestsRight} of ${guests} ${guests === 1 ? "friend" : "friends"}${celebRight === null ? "" : celebRight ? ", celebrity right" : ", celebrity wrong"}`;
+        return { answererId, value: a.value, byPlayerId: a.by, at: a.at, auto, override, correct: points > 0, points, detail };
+      }
       const auto = autoMark(q, a.value, ctx.closest, { ctx, answererTeamId: teamOf(answererId) });
       const override = answererId in overrides ? overrides[answererId] : null;
       return {
@@ -203,6 +244,8 @@ export function markAnswers(s: ServerState, quiz: Activity, q: Question): HostQu
         auto,
         override,
         correct: override ?? auto === "correct",
+        points: (override ?? auto === "correct") ? base : 0,
+        detail: null,
       };
     })
     .sort((a, b) => a.at - b.at);
@@ -219,7 +262,29 @@ function grade(s: ServerState, quiz: Activity, q: Question, now: number): void {
   const marked = markAnswers(s, quiz, q).filter((m) => m.correct);
   const number = quiz.questions!.indexOf(q) + 1;
   const pts = pointsFor(quiz, q);
-  const fastest = quiz.speedBonus && !["number", "poll", "whowrote"].includes(q.type) ? marked[0] : undefined;
+  if (q.type === "facemash") {
+    for (const m of marked) {
+      const target = recipient(s, quiz, m.answererId);
+      if (!target || m.points <= 0) continue;
+      s.ledger.push({
+        id: newId(s, "e"),
+        at: now,
+        teamId: target.teamId,
+        playerId: target.playerId,
+        activityId: quiz.id,
+        points: m.points,
+        reason: `Q${number}: ${m.detail}`,
+        kind: "award",
+        placement: null,
+        questionId: q.id,
+        voided: false,
+        voidedAt: null,
+        revealed: false,
+      });
+    }
+    return;
+  }
+  const fastest = quiz.speedBonus && !["number", "poll", "whowrote", "facemash"].includes(q.type) ? marked[0] : undefined;
   for (const m of marked) {
     const target = recipient(s, quiz, m.answererId);
     if (!target) continue;
@@ -275,16 +340,32 @@ function parseNumber(v: unknown): number | null {
 /** Validates a question from the editor or an import. Pass the state to check facts and videos exist. */
 export function questionFields(p: Payload, s?: ServerState): Omit<Question, "id" | "imageId"> {
   const type = p.type as QuestionType;
-  if (!["choice", "truefalse", "number", "text", "poll", "whowrote"].includes(type)) throw new UserError("Choose a question type.");
+  if (!["choice", "truefalse", "number", "text", "poll", "whowrote", "facemash"].includes(type)) throw new UserError("Choose a question type.");
   // "Who wrote this?" shows the fact itself, so the question line is optional.
-  const prompt = cleanLine(p.prompt, QUESTION_MAX, "The question", type !== "whowrote") || (type === "whowrote" ? "Who wrote this?" : "");
+  const prompt =
+    cleanLine(p.prompt, QUESTION_MAX, "The question", type !== "whowrote" && type !== "facemash") ||
+    (type === "whowrote" ? "Who wrote this?" : type === "facemash" ? "Who's in this face mash?" : "");
   let options: string[] = [];
   let correctIndex = 0;
   let numberAnswer: number | null = null;
   let accepted: string[] = [];
   let optionsKind: PollOptionsKind = "custom";
   let factId: string | null = null;
-  if (type === "poll") {
+  let pickIds: string[] = [];
+  let bonus: number | null = null;
+  let answerImageId: string | null = null;
+  if (type === "facemash") {
+    pickIds = [...new Set((Array.isArray(p.pickIds) ? p.pickIds : []).filter((x): x is string => typeof x === "string"))];
+    if (!pickIds.length) throw new UserError("Choose the guests in the face mash.");
+    if (pickIds.length > MAX_MASH_GUESTS) throw new UserError(`A face mash can have up to ${MAX_MASH_GUESTS} guests.`);
+    if (s && pickIds.some((id) => !s.players.some((pl) => pl.id === id))) throw new UserError("One of those guests is no longer on the guest list.");
+    accepted = (Array.isArray(p.accepted) ? p.accepted : []).map((o) => cleanLine(o, ANSWER_MAX, "The celebrity")).filter(Boolean);
+    bonus = p.bonus === null || p.bonus === undefined || p.bonus === "" ? null : int(p, "bonus", { min: 0, max: MAX_POINTS, label: "the bonus" });
+    if (p.answerImageId !== null && p.answerImageId !== undefined && p.answerImageId !== "") {
+      if (typeof p.answerImageId !== "string") throw new UserError("That answer photo didn't upload properly. Try again.");
+      answerImageId = p.answerImageId;
+    }
+  } else if (type === "poll") {
     optionsKind = p.optionsKind as PollOptionsKind;
     if (!["players", "teams", "custom"].includes(optionsKind)) throw new UserError("Choose what teams vote for.");
     if (optionsKind === "custom") {
@@ -319,7 +400,7 @@ export function questionFields(p: Payload, s?: ServerState): Omit<Question, "id"
     if (typeof p.videoId !== "string" || (s && !s.videos.some((v) => v.id === p.videoId))) throw new UserError("That video no longer exists.");
     videoId = p.videoId;
   }
-  return { type, prompt, options, correctIndex, numberAnswer, accepted, points, seconds, notes, fact, videoId, optionsKind, factId };
+  return { type, prompt, options, correctIndex, numberAnswer, accepted, points, seconds, notes, fact, videoId, optionsKind, factId, pickIds, bonus, answerImageId };
 }
 
 /**
@@ -474,13 +555,14 @@ export const quizHost: Record<string, Handler> = {
     if (p.questionId) {
       const q = quiz.questions.find((x) => x.id === p.questionId);
       if (!q) throw new UserError("That question no longer exists.");
-      const oldImage = q.imageId;
+      const oldImages = [q.imageId, q.answerImageId ?? null];
       Object.assign(q, fields, { imageId });
       if (s.quiz.revealed.includes(q.id)) grade(s, quiz, q, now);
+      const gone = oldImages.filter((x): x is string => !!x && x !== q.imageId && x !== q.answerImageId);
       return {
         data: { questionId: q.id },
         audit: ["quiz.question.edit", `${quiz.name}: edited Q${quiz.questions.indexOf(q) + 1}`],
-        deleteImages: oldImage && oldImage !== imageId ? [oldImage] : undefined,
+        deleteImages: gone.length ? gone : undefined,
       };
     }
     if (quiz.questions.length >= MAX_QUESTIONS) throw new UserError(`A quiz can have up to ${MAX_QUESTIONS} questions.`);
@@ -502,7 +584,8 @@ export const quizHost: Record<string, Handler> = {
     const i = quiz.questions.indexOf(q);
     quiz.questions.splice(i, 1);
     if (s.quiz.activityId === quiz.id && s.quiz.index >= i && s.quiz.index > -1) s.quiz.index--;
-    return { audit: ["quiz.question.delete", `${quiz.name}: removed Q${i + 1}`], deleteImages: q.imageId ? [q.imageId] : undefined };
+    const images = [q.imageId, q.answerImageId ?? null].filter((x): x is string => !!x);
+    return { audit: ["quiz.question.delete", `${quiz.name}: removed Q${i + 1}`], deleteImages: images.length ? images : undefined };
   },
 
   "quiz.question.move": (s, _a, p) => {
@@ -618,7 +701,16 @@ export const quizPlayer: Record<string, Handler> = {
     if (!me.teamId) throw new UserError("You're not on a team yet.");
     findTeam(s, me.teamId);
     let value: string;
-    if (q.type === "poll" || q.type === "whowrote") {
+    if (q.type === "facemash") {
+      const v = (p.value ?? {}) as Partial<MashAnswer>;
+      const inPlay = new Set(guestsInPlay(s).map((x) => x.id));
+      const guests = [...new Set(Array.isArray(v.guests) ? v.guests : [])];
+      if (guests.some((g) => typeof g !== "string" || !inPlay.has(g))) throw new UserError("Pick guests from the list.");
+      if (guests.length > (q.pickIds?.length ?? 0)) throw new UserError(`Pick up to ${q.pickIds?.length ?? 0} guests.`);
+      const celebrity = q.accepted.length ? cleanLine(v.celebrity, ANSWER_MAX, "The celebrity") : "";
+      if (!guests.length && !celebrity) throw new UserError("Pick a guest or name the celebrity first.");
+      value = JSON.stringify({ guests, celebrity });
+    } else if (q.type === "poll" || q.type === "whowrote") {
       if (typeof p.value !== "string" || !choicesFor(s, q).some((c) => c.key === p.value)) throw new UserError("Choose one of the options.");
       if (q.type === "poll" && q.optionsKind === "teams" && p.value === me.teamId) throw new UserError("You can't vote for your own team.");
       value = p.value;
@@ -663,8 +755,17 @@ export function quizView(s: ServerState, revealAnswers: boolean): QuizView | nul
     const results: QuizResult[] = marked.map((m) => ({
       answererId: m.answererId,
       correct: m.correct,
-      value: q.type === "number" ? formatNumber(Number(m.value)) : q.type === "text" ? m.value : voting ? label(m.value) : null,
-      points: m.correct ? pointsFor(quiz, q) + (fastest === m ? quiz.speedBonus! : 0) : 0,
+      value:
+        q.type === "number"
+          ? formatNumber(Number(m.value))
+          : q.type === "text"
+            ? m.value
+            : q.type === "facemash"
+              ? m.detail
+              : voting
+                ? label(m.value)
+                : null,
+      points: q.type === "facemash" ? m.points : m.correct ? pointsFor(quiz, q) + (fastest === m ? quiz.speedBonus! : 0) : 0,
       fastest: fastest === m,
     }));
     const answer =
@@ -674,7 +775,9 @@ export function quizView(s: ServerState, revealAnswers: boolean): QuizView | nul
           : "No votes"
         : q.type === "whowrote"
           ? (s.players.find((p) => p.id === ctx.writerId)?.name ?? "A guest")
-          : answerText(q);
+          : q.type === "facemash"
+            ? [...(q.pickIds ?? []).map((id) => s.players.find((p) => p.id === id)?.name ?? "A guest"), ...(q.accepted[0] ? [q.accepted[0]] : [])].join(" + ")
+            : answerText(q);
     reveal = {
       answer,
       correctIndex: q.type === "choice" || q.type === "truefalse" ? q.correctIndex : null,
@@ -682,6 +785,8 @@ export function quizView(s: ServerState, revealAnswers: boolean): QuizView | nul
       counts: voting ? ctx.counts : null,
       winners: ctx.winners,
       writerId: q.type === "whowrote" ? ctx.writerId : null,
+      pickIds: q.type === "facemash" ? [...(q.pickIds ?? [])] : [],
+      answerImageId: q.type === "facemash" ? (q.answerImageId ?? null) : null,
     };
   }
   return {
@@ -700,6 +805,7 @@ export function quizView(s: ServerState, revealAnswers: boolean): QuizView | nul
           options: q.options,
           choices,
           optionsKind: q.type === "poll" ? (q.optionsKind ?? "custom") : q.type === "whowrote" ? "players" : null,
+          mash: q.type === "facemash" ? { guests: q.pickIds?.length ?? 0, celebrity: q.accepted.length > 0 } : null,
           imageId: q.imageId,
           points: pointsFor(quiz, q),
         }
@@ -710,7 +816,17 @@ export function quizView(s: ServerState, revealAnswers: boolean): QuizView | nul
 }
 
 export function questionView(q: Question): QuestionView {
-  return { ...q, options: q.options.slice(), accepted: q.accepted.slice(), videoId: q.videoId ?? null, optionsKind: q.optionsKind ?? "custom", factId: q.factId ?? null };
+  return {
+    ...q,
+    options: q.options.slice(),
+    accepted: q.accepted.slice(),
+    videoId: q.videoId ?? null,
+    optionsKind: q.optionsKind ?? "custom",
+    factId: q.factId ?? null,
+    pickIds: [...(q.pickIds ?? [])],
+    bonus: q.bonus ?? null,
+    answerImageId: q.answerImageId ?? null,
+  };
 }
 
 /** Whether this guest wrote the fact in the "Who wrote this?" question that's open. */
@@ -742,5 +858,5 @@ export function hostQuizAnswers(s: ServerState): HostQuizAnswer[] {
 
 /** Images used by a quiz, so they can be deleted with it. */
 export function quizImages(a: Activity): string[] {
-  return (a.questions ?? []).map((q) => q.imageId).filter((x): x is string => !!x);
+  return (a.questions ?? []).flatMap((q) => [q.imageId, q.answerImageId ?? null]).filter((x): x is string => !!x);
 }

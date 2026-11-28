@@ -5548,3 +5548,59 @@ img.member__emoji {
 .qform__option--plain {
   grid-template-columns: auto minmax(0, 1fr) auto;
 }
+
+/* Face mash: choosing guests in the control room */
+.mash-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.mash-pick__guest {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid var(--spruce-line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.mash-pick__guest.is-on {
+  border-color: var(--brass);
+  background: rgba(242, 181, 68, 0.12);
+}
+.mash-pick__guest input {
+  accent-color: var(--brass);
+}
+
+/* Face mash: the reveal on the TV */
+.mash-reveal {
+  display: grid;
+  gap: 1.4vw;
+  justify-items: start;
+}
+.mash-reveal__photo {
+  max-height: 34vh;
+  max-width: 100%;
+  border-radius: 1vw;
+  border: 0.3vw solid var(--brass);
+  animation: pop-in 700ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.mash-reveal__who {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 1.4vw;
+}
+
+/* Face mash: answering on a phone */
+.mash-phone {
+  display: grid;
+  gap: 0.7rem;
+}
+/* Face mash answers carry a breakdown, so they wrap rather than cut off. */
+.answers__value--long {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}

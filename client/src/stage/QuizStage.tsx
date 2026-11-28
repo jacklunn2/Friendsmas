@@ -55,6 +55,7 @@ export function QuizStage({ view, serverNow }: { view: StageView; serverNow: () 
   const answered = new Set(qz.answeredIds);
   const choices = q.type === "choice" || q.type === "truefalse";
   const voting = !!q.choices;
+  const mash = q.mash;
   const correctIndex = revealed ? (qz.reveal!.correctIndex ?? -1) : -1;
   const teamMap = new Map(view.teams.map((t) => [t.id, t]));
 
@@ -100,6 +101,32 @@ export function QuizStage({ view, serverNow }: { view: StageView; serverNow: () 
                   {q.type === "whowrote" ? "Guess who wrote it on your phone. Their own team can't score." : "Vote on your phone. Teams that pick the most popular answer score."}
                 </p>
               </>
+            )
+          ) : mash ? (
+            revealed ? (
+              <div className="mash-reveal">
+                {qz.reveal!.answerImageId && <img className="mash-reveal__photo" src={imageUrl(qz.reveal!.answerImageId, view.eventCode)} alt="The originals" />}
+                <ul className="mash-reveal__who">
+                  {qz.reveal!.pickIds.map((id) => {
+                    const p = players.get(id);
+                    return (
+                      <li key={id} className="quiz-face">
+                        {p && <Avatar player={p} className="quiz-face__photo" />}
+                        <span className="quiz-face__name">{p?.name ?? "A guest"}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className="quiz-q__answer">
+                  <span className="quiz-q__answer-label">In the mash</span>
+                  {qz.reveal!.answer}
+                </p>
+              </div>
+            ) : (
+              <p className="quiz-q__type-hint">
+                Pick the {mash.guests === 1 ? "friend" : `${mash.guests} friends`} in it on your phone
+                {mash.celebrity ? " and type the celebrity" : ""}. A point for each one you get, plus a bonus for all of them.
+              </p>
             )
           ) : choices ? (
             <ol className={`quiz-options quiz-options--${q.options.length}`}>

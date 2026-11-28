@@ -18,7 +18,9 @@ export type ScoringScheme = "placement" | "perCorrect" | "judged";
 export type EntryKind = "award" | "bonus" | "penalty";
 export type StageScreen = "teams" | "activity" | "quiz" | "results" | "standings" | "final" | "welcome" | "missions" | "poll" | "prize" | "house";
 export type ActivityFormat = "live" | "quiz" | "poll";
-export type QuestionType = "choice" | "truefalse" | "number" | "text" | "poll" | "whowrote";
+export type QuestionType = "choice" | "truefalse" | "number" | "text" | "poll" | "whowrote" | "facemash";
+/** Face mash: the most guests a mash can blend. */
+export const MAX_MASH_GUESTS = 4;
 /** Question types where teams pick from a list worked out at the time (guests, teams or the host's options). */
 export const VOTE_TYPES: QuestionType[] = ["poll", "whowrote"];
 export type QuizPhase = "intro" | "open" | "closed" | "revealed";
@@ -130,6 +132,12 @@ export interface QuestionView {
   optionsKind: PollOptionsKind;
   /** "Who wrote this?": the guest's secret fact it uses. */
   factId: string | null;
+  /** Face mash: the guests blended into the photo. (The celebrity's spellings are in `accepted`.) */
+  pickIds: string[];
+  /** Face mash: extra points for getting every face right. */
+  bonus: number | null;
+  /** Face mash: a photo shown at the reveal (say, the originals side by side). */
+  answerImageId: string | null;
   /** Overrides the quiz's points per correct answer. */
   points: number | null;
   /** Overrides the quiz's seconds per question; 0 = no timer. */
@@ -148,6 +156,8 @@ export interface LiveQuestion {
   /** Polls and "Who wrote this?": what teams pick between. */
   choices: PollOptionView[] | null;
   optionsKind: PollOptionsKind | null;
+  /** Face mash: how many guests to pick, and whether there's a celebrity to name. */
+  mash: { guests: number; celebrity: boolean } | null;
   imageId: string | null;
   points: number;
 }
@@ -184,6 +194,9 @@ export interface QuizView {
     winners: string[];
     /** "Who wrote this?": the writer. */
     writerId: string | null;
+    /** Face mash: the guests in it, and the answer photo. */
+    pickIds: string[];
+    answerImageId: string | null;
   } | null;
 }
 
@@ -200,9 +213,19 @@ export interface HostQuizAnswer {
   at: number;
   /** What automatic marking decided. "close" = a near miss to review. */
   auto: "correct" | "close" | "wrong";
-  /** The host's decision, if any. */
+  /** The host's decision, if any. Face mash: the decision on the celebrity. */
   override: boolean | null;
   correct: boolean;
+  /** Points this answer earns. */
+  points: number;
+  /** Face mash: how it went, e.g. "2 of 2 friends, celebrity right". */
+  detail: string | null;
+}
+
+/** A face mash answer as phones send it and the server stores it. */
+export interface MashAnswer {
+  guests: string[];
+  celebrity: string;
 }
 
 export interface TimerView {
@@ -779,6 +802,7 @@ export function answerText(q: Pick<QuestionView, "type" | "options" | "correctIn
   if (q.type === "number") return q.numberAnswer === null ? "" : formatNumber(q.numberAnswer);
   if (q.type === "poll") return "The most popular answer scores";
   if (q.type === "whowrote") return "Whoever wrote it";
+  if (q.type === "facemash") return q.accepted[0] ? `The guests in it + ${q.accepted[0]}` : "The guests in it";
   return q.accepted[0] ?? "";
 }
 
@@ -793,4 +817,5 @@ export const QUESTION_TYPE_LABEL: Record<QuestionType, string> = {
   text: "Exact answer",
   poll: "Poll",
   whowrote: "Who wrote this?",
+  facemash: "Face mash",
 };

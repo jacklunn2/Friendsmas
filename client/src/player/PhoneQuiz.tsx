@@ -16,6 +16,7 @@ export function PhoneQuiz({ view, send, serverNow }: { view: PlayerView; send: S
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [typed, setTyped] = useState("");
+  const [picked, setPicked] = useState<string[]>([]);
 
   // New question: clear the form and buzz.
   const lastQ = useRef<string | null>(null);
@@ -23,6 +24,7 @@ export function PhoneQuiz({ view, send, serverNow }: { view: PlayerView; send: S
     if (q && q.id !== lastQ.current && qz?.phase === "open") navigator.vibrate?.(120);
     if (q?.id !== lastQ.current) {
       setTyped("");
+      setPicked([]);
       setError(null);
       setPending(null);
     }
@@ -35,10 +37,10 @@ export function PhoneQuiz({ view, send, serverNow }: { view: PlayerView; send: S
   const mine = view.myQuizAnswer;
   const partnerName = (id: string) => (id === me.id ? "you" : (view.players.find((p) => p.id === id)?.name ?? "your teammate"));
 
-  const answer = async (value: string | number) => {
+  const answer = async (value: string | number | { guests: string[]; celebrity: string }) => {
     if (!q) return;
     setError(null);
-    setPending(String(value));
+    setPending(typeof value === "object" ? "mash" : String(value));
     try {
       await send("quiz.answer", { questionId: q.id, value });
     } catch (e) {
@@ -66,8 +68,18 @@ export function PhoneQuiz({ view, send, serverNow }: { view: PlayerView; send: S
   const voteChoices = q.choices;
   const players = playerMap(view.players);
   const teamsById = new Map(view.teams.map((t) => [t.id, t]));
+  const mashText = (v: string) => {
+    try {
+      const m = JSON.parse(v) as { guests: string[]; celebrity: string };
+      return [...m.guests.map((id) => players.get(id)?.name ?? "?"), ...(m.celebrity ? [m.celebrity] : [])].join(" + ");
+    } catch {
+      return v;
+    }
+  };
   const shown = (v: string) =>
-    voteChoices
+    q.type === "facemash"
+      ? mashText(v)
+      : voteChoices
       ? (voteChoices.find((c) => c.key === v)?.label ?? "")
       : choices
         ? `${q.type === "choice" ? `${OPTION_LETTERS[Number(v)]}: ` : ""}${q.options[Number(v)] ?? ""}`
@@ -112,6 +124,21 @@ export function PhoneQuiz({ view, send, serverNow }: { view: PlayerView; send: S
           </p>
           {mine && !result?.correct && <p className="phone__muted">{team ? "Your team" : "You"} said {shown(mine.value)}.</p>}
         </div>
+      ) : q.mash ? (
+        <MashForm
+          key={q.id}
+          need={q.mash.guests}
+          celebrity={q.mash.celebrity}
+          guests={view.players.filter((p) => p.teamId && p.status !== "pending").sort((a, b) => a.name.localeCompare(b.name))}
+          picked={picked}
+          setPicked={setPicked}
+          typed={typed}
+          setTyped={setTyped}
+          open={open}
+          busy={pending !== null}
+          hasAnswer={!!mine}
+          onSubmit={() => answer({ guests: picked, celebrity: typed.trim() })}
+        />
       ) : voteChoices ? (
         <ul className={`poll-options poll-options--${q.optionsKind ?? "custom"}`}>
           {voteChoices
@@ -190,5 +217,85 @@ export function PhoneQuiz({ view, send, serverNow }: { view: PlayerView; send: S
         </p>
       )}
     </article>
+  );
+}
+
+/** Face mash: tap the guests in it (any order), type the celebrity, lock it in. */
+function MashForm({
+  need,
+  celebrity,
+  guests,
+  picked,
+  setPicked,
+  typed,
+  setTyped,
+  open,
+  busy,
+  hasAnswer,
+  onSubmit,
+}: {
+  need: number;
+  celebrity: boolean;
+  guests: PlayerView["players"];
+  picked: string[];
+  setPicked: (ids: string[]) => void;
+  typed: string;
+  setTyped: (v: string) => void;
+  open: boolean;
+  busy: boolean;
+  hasAnswer: boolean;
+  onSubmit: () => void;
+}) {
+  const toggle = (id: string) => {
+    if (picked.includes(id)) setPicked(picked.filter((x) => x !== id));
+    else if (picked.length < need) setPicked([...picked, id]);
+  };
+  return (
+    <form
+      className="mash-phone"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit();
+      }}
+    >
+      <p className="phone__muted">
+        Tap the {need === 1 ? "friend" : `${need} friends`} in it ({picked.length} of {need}).
+      </p>
+      <ul className="poll-options poll-options--players">
+        {guests.map((p) => {
+          const on = picked.includes(p.id);
+          return (
+            <li key={p.id}>
+              <button
+                type="button"
+                className={`poll-option${on ? " is-chosen" : ""}`}
+                aria-pressed={on}
+                disabled={!open || (!on && picked.length >= need)}
+                onClick={() => toggle(p.id)}
+              >
+                <Avatar player={p} className="poll-option__photo" />
+                <span className="poll-option__label">{p.name}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {celebrity && (
+        <input
+          className="input"
+          autoComplete="off"
+          autoCapitalize="words"
+          maxLength={ANSWER_MAX}
+          placeholder="And the celebrity is…"
+          value={typed}
+          disabled={!open}
+          onChange={(e) => setTyped(e.target.value)}
+          aria-label="The celebrity"
+        />
+      )}
+      <button className="btn btn--primary" disabled={!open || busy || (!picked.length && !typed.trim())}>
+        {hasAnswer ? "Change our answer" : "Lock it in"}
+      </button>
+    </form>
   );
 }

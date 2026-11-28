@@ -99,6 +99,10 @@ export interface Question {
   optionsKind?: PollOptionsKind;
   /** "Who wrote this?" questions: the secret fact. */
   factId?: string | null;
+  /** Face mash: the guests in the photo, the bonus for all of them, and the answer photo. */
+  pickIds?: string[];
+  bonus?: number | null;
+  answerImageId?: string | null;
   points: number | null;
   seconds: number | null;
   notes: string;

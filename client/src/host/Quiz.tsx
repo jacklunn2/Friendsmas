@@ -4,6 +4,7 @@
 import { useContext, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   ANSWER_MAX,
+  MAX_MASH_GUESTS,
   MAX_OPTIONS,
   OPTION_LETTERS,
   OPTION_MAX,
@@ -245,6 +246,12 @@ function QuestionBody({ q, view, showAnswer }: { q: QuestionView; view: HostView
             Written by <strong>{fact.writer}</strong>. Their team can't score on this one.
           </p>
         )}
+        {q.type === "facemash" && showAnswer && (
+          <p className="qbody__answer">
+            In it: <strong>{[...q.pickIds.map((id) => view.roster.find((p) => p.id === id)?.name ?? "?"), ...(q.accepted[0] ? [q.accepted[0]] : [])].join(" + ")}</strong>
+            {q.bonus ? ` · +${q.bonus} for all of them` : ""}
+          </p>
+        )}
         {q.type === "poll" && (
           <>
             <p className="host__muted">Teams vote for: {POLL_KIND_LABEL[q.optionsKind]}. Teams that pick the most popular answer score.</p>
@@ -303,8 +310,19 @@ function Answers({
     return players.get(ans.answererId)?.name ?? "A guest";
   };
   const choices = view.quiz?.question?.choices ?? [];
+  const mashShown = (ans: HostQuizAnswer) => {
+    try {
+      const v = JSON.parse(ans.value) as { guests: string[]; celebrity: string };
+      const names = v.guests.map((id) => players.get(id)?.name ?? "?");
+      return [...names, ...(v.celebrity ? [`“${v.celebrity}”`] : [])].join(" + ");
+    } catch {
+      return ans.value;
+    }
+  };
   const shown = (ans: HostQuizAnswer) =>
-    VOTE_TYPES.includes(q.type)
+    q.type === "facemash"
+      ? `${mashShown(ans)}${ans.detail ? ` (${ans.detail}${ans.points ? `, ${ans.points} pts` : ""})` : ""}`
+      : VOTE_TYPES.includes(q.type)
       ? (choices.find((c) => c.key === ans.value)?.label ?? "?")
       : q.type === "choice" || q.type === "truefalse"
         ? `${q.type === "choice" ? `${OPTION_LETTERS[Number(ans.value)]}: ` : ""}${q.options[Number(ans.value)] ?? "?"}`
@@ -326,15 +344,31 @@ function Answers({
             return (
               <li key={ans.answererId} className={`answers__row answers__row--${ans.correct ? "right" : ans.auto === "close" && ans.override === null ? "close" : "wrong"}`} style={team ? teamStyle(team) : undefined}>
                 <span className="answers__who">{name(ans)}</span>
-                <span className="answers__value">{phase === "open" && q.type !== "text" && q.type !== "number" ? "Answered" : shown(ans)}</span>
+                <span className={`answers__value${q.type === "facemash" ? " answers__value--long" : ""}`}>{phase === "open" && q.type !== "text" && q.type !== "number" && q.type !== "facemash" ? "Answered" : shown(ans)}</span>
                 <span className="answers__mark">
-                  {ans.override !== null ? (ans.override ? "Marked right" : "Marked wrong") : ans.auto === "correct" ? "Right" : ans.auto === "close" ? "Close: check it" : "Wrong"}
+                  {q.type === "facemash"
+                    ? ans.override !== null
+                      ? `Celebrity marked ${ans.override ? "right" : "wrong"}`
+                      : ans.auto === "close"
+                        ? "Celebrity close: check it"
+                        : ans.auto === "correct"
+                          ? "All right"
+                          : ""
+                    : ans.override !== null
+                      ? ans.override
+                        ? "Marked right"
+                        : "Marked wrong"
+                      : ans.auto === "correct"
+                        ? "Right"
+                        : ans.auto === "close"
+                          ? "Close: check it"
+                          : "Wrong"}
                 </span>
                 <span className="answers__buttons">
-                  <button className="btn btn--small btn--ghost" aria-pressed={ans.override === true} onClick={() => run("quiz.mark", { answererId: ans.answererId, correct: true })} aria-label={`Mark ${name(ans)} right`}>
+                  <button className="btn btn--small btn--ghost" aria-pressed={ans.override === true} onClick={() => run("quiz.mark", { answererId: ans.answererId, correct: true })} aria-label={q.type === "facemash" ? `Mark ${name(ans)}'s celebrity right` : `Mark ${name(ans)} right`}>
                     ✓
                   </button>
-                  <button className="btn btn--small btn--ghost" aria-pressed={ans.override === false} onClick={() => run("quiz.mark", { answererId: ans.answererId, correct: false })} aria-label={`Mark ${name(ans)} wrong`}>
+                  <button className="btn btn--small btn--ghost" aria-pressed={ans.override === false} onClick={() => run("quiz.mark", { answererId: ans.answererId, correct: false })} aria-label={q.type === "facemash" ? `Mark ${name(ans)}'s celebrity wrong` : `Mark ${name(ans)} wrong`}>
                     ✗
                   </button>
                   {ans.override !== null && (
@@ -393,7 +427,12 @@ function QuestionBank({ activity: a, view, run }: { activity: ActivityView; view
               <span className="qlist__prompt">
                 {q.type === "whowrote" ? `“${factLookup(view, q.factId)?.text ?? "(fact removed)"}”` : q.prompt}
                 <span className="host__muted qlist__detail">
-                  {QUESTION_TYPE_LABEL[q.type]} · {q.type === "whowrote" ? `written by ${factLookup(view, q.factId)?.writer ?? "?"}` : answerText(q)}
+                  {QUESTION_TYPE_LABEL[q.type]} ·{" "}
+                  {q.type === "whowrote"
+                    ? `written by ${factLookup(view, q.factId)?.writer ?? "?"}`
+                    : q.type === "facemash"
+                      ? [...q.pickIds.map((id) => view.roster.find((p) => p.id === id)?.name ?? "?"), ...(q.accepted[0] ? [q.accepted[0]] : [])].join(" + ")
+                      : answerText(q)}
                   {q.imageId ? " · photo" : ""}
                   {q.videoId ? " · video" : ""}
                 </span>
@@ -447,6 +486,10 @@ function QuestionForm({
   const [optionsKind, setOptionsKind] = useState<PollOptionsKind>(question?.optionsKind ?? "custom");
   const [factId, setFactId] = useState<string>(question?.factId ?? "");
   const [videoId, setVideoId] = useState<string>(question?.videoId ?? "");
+  const [pickIds, setPickIds] = useState<string[]>(question?.pickIds ?? []);
+  const [bonus, setBonus] = useState(question?.bonus != null ? String(question.bonus) : "2");
+  const [answerImageId, setAnswerImageId] = useState<string | null>(question?.answerImageId ?? null);
+  const answerFile = useRef<HTMLInputElement>(null);
   const [correct, setCorrect] = useState(question?.correctIndex ?? 0);
   const [numberAnswer, setNumberAnswer] = useState(question?.numberAnswer !== null && question?.numberAnswer !== undefined ? String(question.numberAnswer) : "");
   const [accepted, setAccepted] = useState((question?.accepted ?? []).join("\n"));
@@ -459,17 +502,18 @@ function QuestionForm({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const file = useRef<HTMLInputElement>(null);
 
-  const upload = async (f: File | undefined) => {
+  const upload = async (f: File | undefined, set: (id: string) => void = setImageId) => {
     if (!f) return;
     setBusy(true);
     setUploadError(null);
     try {
-      setImageId(await uploadQuizImage(f));
+      set(await uploadQuizImage(f));
     } catch (e) {
       setUploadError((e as Error).message);
     } finally {
       setBusy(false);
       if (file.current) file.current.value = "";
+      if (answerFile.current) answerFile.current.value = "";
     }
   };
 
@@ -495,6 +539,9 @@ function QuestionForm({
           videoId: videoId || null,
           optionsKind,
           factId: factId || null,
+          pickIds,
+          bonus: bonus === "" ? null : Number(bonus),
+          answerImageId,
           points: points === "" ? null : Number(points),
           seconds: seconds === "" ? null : Number(seconds),
           notes,
@@ -514,6 +561,8 @@ function QuestionForm({
       setImageId(null);
       setVideoId("");
       setFactId("");
+      setPickIds([]);
+      setAnswerImageId(null);
       setNotes("");
       setFact("");
     } else onDone();
@@ -544,7 +593,16 @@ function QuestionForm({
       ) : (
         <label className="field">
           <span className="field__label">Question</span>
-          <textarea className="input input--area" rows={2} maxLength={QUESTION_MAX} value={prompt} onChange={(e) => setPrompt(e.target.value)} required autoFocus />
+          <textarea
+            className="input input--area"
+            rows={2}
+            maxLength={QUESTION_MAX}
+            value={prompt}
+            placeholder={type === "facemash" ? "Who's in this face mash?" : undefined}
+            onChange={(e) => setPrompt(e.target.value)}
+            required={type !== "facemash"}
+            autoFocus
+          />
         </label>
       )}
 
@@ -640,6 +698,55 @@ function QuestionForm({
         </label>
       )}
 
+      {type === "facemash" && (
+        <fieldset className="choice">
+          <legend className="choice__legend">Who's in the mash (up to {MAX_MASH_GUESTS})</legend>
+          <div className="mash-pick">
+            {view.roster
+              .filter((p) => p.status !== "pending")
+              .sort((x, y) => x.name.localeCompare(y.name))
+              .map((p) => {
+                const on = pickIds.includes(p.id);
+                return (
+                  <label key={p.id} className={`mash-pick__guest${on ? " is-on" : ""}`}>
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      disabled={!on && pickIds.length >= MAX_MASH_GUESTS}
+                      onChange={() => setPickIds(on ? pickIds.filter((x) => x !== p.id) : [...pickIds, p.id])}
+                    />
+                    {p.name}
+                  </label>
+                );
+              })}
+          </div>
+          <label className="field">
+            <span className="field__label">The celebrity, with any other spellings to accept, one per line (leave empty for no celebrity)</span>
+            <textarea className="input input--area" rows={2} maxLength={ANSWER_MAX * 6} value={accepted} onChange={(e) => setAccepted(e.target.value)} />
+            <span className="host__muted">Teams pick the guests from everyone's photos, in any order, and type the celebrity. Near misses come to you to check.</span>
+          </label>
+          <label className="field field--inline">
+            <span className="field__label">Bonus for getting everyone right</span>
+            <input className="input input--small input--num" type="number" min={0} value={bonus} onChange={(e) => setBonus(e.target.value)} />
+          </label>
+          <div className="qform__picture">
+            {answerImageId ? (
+              <>
+                <img src={imageUrl(answerImageId, code)} alt="" />
+                <button type="button" className="btn btn--small btn--ghost" onClick={() => setAnswerImageId(null)}>
+                  Remove the answer photo
+                </button>
+              </>
+            ) : (
+              <button type="button" className="btn btn--small btn--ghost" disabled={busy} onClick={() => answerFile.current?.click()}>
+                {busy ? "Uploading…" : "Add an answer photo (shown at the reveal, e.g. the originals)"}
+              </button>
+            )}
+            <input ref={answerFile} type="file" accept="image/*" hidden onChange={(e) => upload(e.target.files?.[0], setAnswerImageId)} />
+          </div>
+        </fieldset>
+      )}
+
       <div className="qform__picture">
         {imageId ? (
           <>
@@ -650,7 +757,7 @@ function QuestionForm({
           </>
         ) : (
           <button type="button" className="btn btn--small btn--ghost" disabled={busy} onClick={() => file.current?.click()}>
-            {busy ? "Uploading…" : "Add a photo (shown on the TV and phones)"}
+            {busy ? "Uploading…" : type === "facemash" ? "Add the face mash photo" : "Add a photo (shown on the TV and phones)"}
           </button>
         )}
         <input ref={file} type="file" accept="image/*" hidden onChange={(e) => upload(e.target.files?.[0])} />
