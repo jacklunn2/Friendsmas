@@ -157,6 +157,21 @@ describe("secret missions", () => {
     expect(playerView(s, s.players[0].id, T0).myMission!.seen).toBe(true);
   });
 
+  it("sends missions to one guest at a time", () => {
+    const s = setup(4);
+    const [a, b] = s.players;
+    runAction(s, HOST, "missions.redraw", { playerId: a.id }, T0);
+    expect(Object.keys(s.missions.assigned)).toEqual([a.id]);
+    expect(playerView(s, a.id, T0).myMission!.seen).toBe(false);
+    expect(playerView(s, b.id, T0).myMission).toBeNull();
+    const pickFor = hostView(s, [], T0).missions.list.find((m) => m.id !== s.missions.assigned[a.id].missionId)!;
+    runAction(s, HOST, "missions.assign", { playerId: b.id, missionId: pickFor.id }, T0);
+    expect(playerView(s, b.id, T0).myMission!.text).toBe(pickFor.text);
+    expect(Object.keys(s.missions.assigned)).toHaveLength(2);
+    // "Send to everyone waiting" then only reaches the other two.
+    expect(runAction(s, HOST, "missions.handOut", {}, T0).data).toEqual({ given: 2, short: 0 });
+  });
+
   it("says when there aren't enough missions, and never repeats one", () => {
     const s = setup(8);
     const r = runAction(s, HOST, "missions.handOut", {}, T0);

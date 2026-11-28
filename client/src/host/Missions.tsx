@@ -31,7 +31,8 @@ export function MissionsPanel({ view, run }: { view: HostView; run: Run }) {
         </span>
       </header>
       <p className="host__muted">
-        Each guest gets a different mission on their phone. Completed adds +{MISSION_POINTS} to their team, kept secret until the next leaderboard
+        Each guest gets a different mission on their phone. Send them one at a time with Send a mission (random) or Choose…, or all at
+        once. It pops up on their phone straight away. Completed adds +{MISSION_POINTS} to their team, kept secret until the next leaderboard
         reveal. Noticed fails the mission and voids the +{MISSION_POINTS}.
       </p>
 
@@ -48,7 +49,7 @@ export function MissionsPanel({ view, run }: { view: HostView; run: Run }) {
             if (r && typeof r === "object" && r.short) alert(`Handed out ${r.given}. ${r.short} guests still need a mission: add more to the list.`);
           }}
         >
-          Hand out missions{without.length ? ` (${without.length})` : ""}
+          Send to everyone waiting{without.length ? ` (${without.length})` : ""}
         </button>
       </div>
       {without.length > free.length && (
@@ -57,7 +58,7 @@ export function MissionsPanel({ view, run }: { view: HostView; run: Run }) {
         </p>
       )}
 
-      {m.assignments.length > 0 && (
+      {(m.assignments.length > 0 || without.length > 0) && (
         <>
           <div className="row">
             <h3 className="callout__title">Who has what</h3>
@@ -75,6 +76,51 @@ export function MissionsPanel({ view, run }: { view: HostView; run: Run }) {
               </tr>
             </thead>
             <tbody>
+              {without.map((p) => (
+                <tr key={p.id} className="mission-row--waiting">
+                  <td>
+                    <span className="data-table__who">
+                      <Avatar player={p} /> {p.name}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="host__muted">No mission yet</span>
+                  </td>
+                  <td>
+                    <span className="tag">Waiting</span>
+                  </td>
+                  <td>
+                    <span className="row__actions">
+                      <button
+                        className="btn btn--small btn--primary"
+                        disabled={!free.length}
+                        title={free.length ? undefined : "Every mission is taken. Add another to the list."}
+                        onClick={() => run("missions.redraw", { playerId: p.id }, `Mission sent to ${p.name}`)}
+                      >
+                        Send a mission
+                      </button>
+                      {free.length > 0 && (
+                        <details className="menu">
+                          <summary className="btn btn--small btn--ghost" aria-label={`Choose ${p.name}'s mission`}>
+                            Choose…
+                          </summary>
+                          <div className="menu__list">
+                            {free.map((x) => (
+                              <button
+                                key={x.id}
+                                className="menu__item"
+                                onClick={() => run("missions.assign", { playerId: p.id, missionId: x.id }, `Mission sent to ${p.name}`)}
+                              >
+                                Send: {x.text.length > 50 ? `${x.text.slice(0, 49)}…` : x.text}
+                              </button>
+                            ))}
+                          </div>
+                        </details>
+                      )}
+                    </span>
+                  </td>
+                </tr>
+              ))}
               {m.assignments.map((a) => {
                 const p = players.get(a.playerId);
                 if (!p) return null;
