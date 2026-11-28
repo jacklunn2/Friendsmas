@@ -59,7 +59,7 @@ describe("the questionnaire", () => {
     runAction(s, as(s, 0), "player.answers", answers("Trifle", "dessert", ["I was on Blue Peter"]), T0);
     const others = JSON.stringify([stageView(s, T0), playerView(s, s.players[1].id, T0), playerView(s, null, T0)]);
     expect(others).not.toContain("Blue Peter");
-    expect(stageView(s, T0).menu).toEqual([{ playerId: s.players[0].id, dish: "Trifle", category: "dessert", dietary: "" }]);
+    expect(stageView(s, T0).menu).toEqual([{ playerId: s.players[0].id, dish: "Trifle", category: "dessert", dietary: "", withIds: [] }]);
     expect(hostView(s, [], T0).questionnaires[s.players[0].id].facts[0].text).toBe("I was on Blue Peter");
   });
 
@@ -91,6 +91,41 @@ describe("the questionnaire", () => {
     const old = JSON.parse(JSON.stringify(s));
     expect(() => playerView(migrate(old), old.players[0].id, T0)).not.toThrow();
     expect(publicJson(s)).toBeTruthy();
+  });
+});
+
+describe("dishes brought together", () => {
+  it("lists a dish once when a guest says they're bringing it with someone", () => {
+    const s = setup(3);
+    runAction(s, as(s, 0), "player.answers", answers("Pavlova", "dessert"), T0);
+    // Ben picks Ava's dish instead of typing his own.
+    runAction(s, as(s, 1), "player.answers", { facts: ["I can juggle"], sharedWith: s.players[0].id }, T0);
+    runAction(s, as(s, 2), "player.answers", answers("pavlova", "dessert"), T0);
+    const menu = stageView(s, T0).menu;
+    const pav = menu.filter((m) => m.dish.toLowerCase() === "pavlova");
+    expect(pav).toHaveLength(2);
+    expect(pav.find((m) => m.playerId === s.players[0].id)!.withIds).toEqual([s.players[1].id]);
+    expect(playerView(s, s.players[1].id, T0).myQuestionnaire).toMatchObject({ dish: "Pavlova", category: "dessert", sharedWith: s.players[0].id });
+    // Ava and Cleo typed the same thing separately: that's still a duplicate, but Ben isn't.
+    const dup = hostView(s, [], T0).foodWarnings.find((w) => w.kind === "duplicate")!;
+    expect(dup.playerIds).toEqual([s.players[0].id, s.players[2].id]);
+    expect(() => runAction(s, as(s, 0), "player.answers", { facts: ["x"], sharedWith: s.players[1].id }, T0)).toThrow(/your own dish/);
+  });
+
+  it("lets the host list two guests' dish once, and separate them again", () => {
+    const s = setup(2);
+    runAction(s, as(s, 0), "player.answers", answers("Trifle", "dessert"), T0);
+    runAction(s, as(s, 1), "player.answers", answers("Trifle!", "dessert"), T0);
+    expect(hostView(s, [], T0).foodWarnings.some((w) => w.kind === "duplicate")).toBe(true);
+    runAction(s, HOST, "guest.shareDish", { playerId: s.players[1].id, withId: s.players[0].id }, T0);
+    expect(stageView(s, T0).menu).toHaveLength(1);
+    expect(stageView(s, T0).menu[0].withIds).toEqual([s.players[1].id]);
+    expect(hostView(s, [], T0).foodWarnings.some((w) => w.kind === "duplicate")).toBe(false);
+    // Ava changes her dish: Ben's follows.
+    runAction(s, as(s, 0), "player.answers", answers("Mince pies", "dessert"), T0);
+    expect(playerView(s, s.players[1].id, T0).myQuestionnaire!.dish).toBe("Mince pies");
+    runAction(s, HOST, "guest.shareDish", { playerId: s.players[1].id, withId: null }, T0);
+    expect(stageView(s, T0).menu.map((m) => m.dish).sort()).toEqual(["Mince pies", "Mince pies"]);
   });
 });
 

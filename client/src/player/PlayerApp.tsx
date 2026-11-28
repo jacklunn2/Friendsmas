@@ -255,7 +255,7 @@ function Prep({ view, send, getToken, code, pending }: { view: PlayerView; send:
   const [nameOpen, setNameOpen] = useState(false);
   if (nameOpen) return <NameForm me={me} send={send} onDone={() => setNameOpen(false)} />;
   if (questOpen || !view.myQuestionnaire) {
-    return <QuestionnaireForm existing={view.myQuestionnaire} send={send} onDone={() => setQuestOpen(false)} />;
+    return <QuestionnaireForm view={view} send={send} onDone={() => setQuestOpen(false)} />;
   }
   if (photoOpen || (!me.photo && !skipped)) {
     return (
@@ -395,7 +395,7 @@ function InGame({ view, send, serverNow, getToken, code }: InGameProps) {
   if (questOpen || (!view.myQuestionnaire && !busyMoment)) {
     return (
       <QuestionnaireForm
-        existing={view.myQuestionnaire}
+        view={view}
         send={send}
         onDone={() => setQuestOpen(false)}
       />

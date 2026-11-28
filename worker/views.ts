@@ -178,7 +178,8 @@ export function playerView(s: ServerState, playerId: string | null, now: number)
     ...view,
     role: "player",
     me,
-    myQuestionnaire: questionnaireView(raw?.answers),
+    myQuestionnaire: questionnaireView(raw?.answers, s, raw ?? undefined),
+    menu: menuView(s),
     myMission: myMissionView(s, raw?.id ?? null),
     myPollVote: myPollVote(s, raw?.id ?? null),
     myFactOnTv: isMyFact(s, raw?.id ?? null) || isMyFactInQuiz(s, raw?.id ?? null),
@@ -240,7 +241,7 @@ export function hostView(s: ServerState, audit: AuditEntry[], now: number): Host
         .map((a) => [a.id, (a.questions ?? []).filter((q) => s.quiz.revealed.includes(q.id)).map((q) => q.id)]),
     ),
     questionnaires: Object.fromEntries(
-      s.players.filter((p) => p.answers).map((p) => [p.id, questionnaireView(p.answers)!]),
+      s.players.filter((p) => p.answers).map((p) => [p.id, questionnaireView(p.answers, s, p)!]),
     ),
     foodWarnings: foodWarnings(s),
     missions: hostMissionsView(s),

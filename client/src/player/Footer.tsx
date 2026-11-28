@@ -92,13 +92,14 @@ function MeSheet({ view, send, getToken }: { view: PlayerView; send: Send; getTo
 function FoodSheet({ view, send }: { view: PlayerView; send: Send }) {
   const q = view.myQuestionnaire;
   const [editing, setEditing] = useState(!q);
-  if (editing || !q) return <QuestionnaireForm existing={q} send={send} onDone={() => setEditing(false)} />;
+  if (editing || !q) return <QuestionnaireForm view={view} send={send} onDone={() => setEditing(false)} />;
   return (
     <section className="phone__card food-sheet">
       <h2 className="phone__title">Your food</h2>
       <p className="food-sheet__dish">
         {q.dish} <span className="tag">{DISH_CATEGORY_LABEL[q.category]}</span>
       </p>
+      {q.sharedWith && <p className="phone__muted">With {view.players.find((p) => p.id === q.sharedWith)?.name ?? "someone"}</p>}
       {q.dietary && <p className="phone__muted">{q.dietary}</p>}
       <h2 className="phone__title">Your secret facts</h2>
       <p className="phone__muted">Only you and the host can see these, until one turns up in "Who wrote this?".</p>

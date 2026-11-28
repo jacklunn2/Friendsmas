@@ -396,6 +396,8 @@ export interface PlayerView extends PublicView {
   myQuizAnswer: MyQuizAnswer | null;
   /** Names on the guest list that can still be claimed. */
   claimable: { id: string; name: string }[];
+  /** Dishes already on the menu, so a guest can say they're bringing one with someone. */
+  menu: MenuItem[];
 }
 
 // ---------------------------------------------------------------------------
@@ -429,6 +431,8 @@ export interface QuestionnaireView {
   dietary: string;
   facts: SecretFact[];
   completedAt: number;
+  /** Bringing someone else's dish with them: that guest's id. The dish fields then show their dish. */
+  sharedWith: string | null;
 }
 
 /** One dish on the TV's welcome menu. */
@@ -437,6 +441,8 @@ export interface MenuItem {
   dish: string;
   category: DishCategory;
   dietary: string;
+  /** Guests bringing it with them (couples cooking together). */
+  withIds: string[];
 }
 
 export interface FoodWarning {

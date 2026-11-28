@@ -5604,3 +5604,27 @@ img.member__emoji {
   overflow: visible;
   text-overflow: clip;
 }
+
+/* Dishes made together: overlapping cook photos on the TV menu */
+.welcome__dish-cooks {
+  display: inline-flex;
+  flex: none;
+}
+.welcome__dish-cooks .welcome__dish-photo + .welcome__dish-photo {
+  margin-left: -0.8vw;
+}
+/* Phones: picking a dish you're making with someone */
+.quest__shared {
+  display: grid;
+  gap: 0.6rem;
+}
+.quest__dishes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+.quest__with {
+  justify-self: start;
+}

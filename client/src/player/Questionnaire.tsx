@@ -10,22 +10,23 @@ import {
   FACT_MAX,
   MAX_FACTS,
   type DishCategory,
-  type QuestionnaireView,
+  type PlayerView,
 } from "../../../shared/types";
+import { Avatar, playerMap } from "../ui";
 
 type Send = <T = unknown>(action: string, payload?: Record<string, unknown>) => Promise<T>;
 
 const CATEGORY_LABEL: Record<DishCategory, string> = { ...DISH_CATEGORY_LABEL, main: "Main", side: "Side", dessert: "Dessert" };
 
-export function QuestionnaireForm({
-  existing,
-  send,
-  onDone,
-}: {
-  existing: QuestionnaireView | null;
-  send: Send;
-  onDone?: () => void;
-}) {
+export function QuestionnaireForm({ view, send, onDone }: { view: PlayerView; send: Send; onDone?: () => void }) {
+  const existing = view.myQuestionnaire;
+  const meId = view.me?.id;
+  const players = playerMap(view.players);
+  // Other people's dishes, for couples cooking together.
+  const others = view.menu.filter((m) => m.playerId !== meId);
+  const [sharedWith, setSharedWith] = useState<string | null>(existing?.sharedWith ?? null);
+  const [choosing, setChoosing] = useState(false);
+  const shared = sharedWith ? view.menu.find((m) => m.playerId === sharedWith) : undefined;
   const [dish, setDish] = useState(existing?.dish ?? "");
   const [category, setCategory] = useState<DishCategory | null>(existing?.category ?? null);
   const [dietary, setDietary] = useState(existing?.dietary ?? "");
@@ -38,7 +39,7 @@ export function QuestionnaireForm({
     setBusy(true);
     setError(null);
     try {
-      await send("player.answers", { dish, category, dietary, facts });
+      await send("player.answers", sharedWith ? { sharedWith, facts } : { dish, category, dietary, facts });
       onDone?.();
     } catch (err) {
       setError((err as Error).message);
@@ -54,6 +55,53 @@ export function QuestionnaireForm({
 
       <fieldset className="quest__group">
         <legend className="quest__legend">🍽️ What are you bringing?</legend>
+        {shared ? (
+          <div className="quest__shared">
+            <p>
+              You're bringing <strong>{shared.dish}</strong> with {players.get(shared.playerId)?.name ?? "someone"}.
+            </p>
+            <button type="button" className="btn btn--ghost btn--small" onClick={() => setSharedWith(null)}>
+              No, I'm bringing my own
+            </button>
+          </div>
+        ) : choosing ? (
+          <div className="quest__shared">
+            <p className="quest__help">Tap the dish you're making together. It'll appear once on the menu, with both of you.</p>
+            <ul className="quest__dishes">
+              {others.map((m) => {
+                const who = players.get(m.playerId);
+                return (
+                  <li key={m.playerId}>
+                    <button
+                      type="button"
+                      className="poll-option"
+                      onClick={() => {
+                        setSharedWith(m.playerId);
+                        setChoosing(false);
+                      }}
+                    >
+                      {who && <Avatar player={who} className="poll-option__photo" />}
+                      <span className="poll-option__label">
+                        {m.dish}
+                        <span className="phone__muted"> · {who?.name ?? "a guest"}</span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <button type="button" className="btn btn--ghost btn--small" onClick={() => setChoosing(false)}>
+              Back
+            </button>
+          </div>
+        ) : null}
+        {!shared && !choosing && others.length > 0 && (
+          <button type="button" className="btn btn--ghost btn--small quest__with" onClick={() => setChoosing(true)}>
+            Making a dish with someone who's already answered? Choose it here
+          </button>
+        )}
+        {!shared && !choosing && (
+        <>
         <label className="field">
           <span className="field__label">Dish</span>
           <input className="input" value={dish} maxLength={DISH_MAX} onChange={(e) => setDish(e.target.value)} placeholder="e.g. Grandma's trifle" required />
@@ -85,6 +133,8 @@ export function QuestionnaireForm({
             placeholder="e.g. vegetarian, contains nuts"
           />
         </label>
+        </>
+        )}
       </fieldset>
 
       <fieldset className="quest__group">
@@ -125,7 +175,7 @@ export function QuestionnaireForm({
           {error}
         </p>
       )}
-      <button className="btn btn--primary btn--block" disabled={busy || !dish.trim() || !category || !facts[0]?.trim()}>
+      <button className="btn btn--primary btn--block" disabled={busy || (!sharedWith && (!dish.trim() || !category)) || !facts[0]?.trim()}>
         {busy ? "Saving…" : existing ? "Save my answers" : "Done"}
       </button>
       {existing && onDone && (

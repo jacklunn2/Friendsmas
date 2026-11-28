@@ -120,13 +120,18 @@ export function Welcome({ view, trophyUrl }: { view: StageView; trophyUrl: strin
                 <ul className="welcome__dishes">
                   {items.map((m) => {
                     const p = players.get(m.playerId)!;
+                    const cooks = [p, ...m.withIds.map((id) => players.get(id)).filter((x) => !!x)];
                     return (
                       <li key={m.playerId} className="welcome__dish">
-                        <Avatar player={p} className="welcome__dish-photo" />
+                        <span className="welcome__dish-cooks">
+                          {cooks.map((c) => (
+                            <Avatar key={c!.id} player={c!} className="welcome__dish-photo" />
+                          ))}
+                        </span>
                         <span className="welcome__dish-text">
                           <span className="welcome__dish-name">{m.dish}</span>
                           <span className="welcome__dish-by">
-                            {p.name}
+                            {cooks.map((c) => c!.name).join(" & ")}
                             {m.dietary && <span className="welcome__dish-diet"> · {m.dietary}</span>}
                           </span>
                         </span>

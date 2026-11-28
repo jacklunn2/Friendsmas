@@ -58,7 +58,21 @@ export function QuestionnairePanel({ view, run }: { view: HostView; run: Run }) 
       {view.foodWarnings.length > 0 && (
         <ul className="warn-list">
           {view.foodWarnings.map((w) => (
-            <li key={w.message}>{w.message}</li>
+            <li key={w.message}>
+              {w.message}{" "}
+              {w.kind === "duplicate" && (
+                <button
+                  className="btn btn--small btn--ghost"
+                  onClick={async () => {
+                    // Everyone after the first is bringing the first person's dish with them.
+                    for (const id of w.playerIds.slice(1)) await run("guest.shareDish", { playerId: id, withId: w.playerIds[0] });
+                  }}
+                  title="For couples cooking together: the dish appears once on the menu, with both names"
+                >
+                  Same dish: list it once
+                </button>
+              )}
+            </li>
           ))}
         </ul>
       )}
@@ -92,6 +106,14 @@ export function QuestionnairePanel({ view, run }: { view: HostView; run: Run }) 
                   {a ? (
                     <>
                       <span className={dupIds.has(p.id) ? "food-group__dup" : undefined}>{a.dish}</span> <span className="tag">{DISH_CATEGORY_LABEL[a.category]}</span>
+                      {a.sharedWith && (
+                        <div className="host__muted">
+                          With {view.roster.find((x) => x.id === a.sharedWith)?.name ?? "someone"} (listed once){" "}
+                          <button className="btn btn--small btn--ghost" onClick={() => run("guest.shareDish", { playerId: p.id, withId: null }, "Listed separately")}>
+                            List separately
+                          </button>
+                        </div>
+                      )}
                       {a.dietary && <div className="host__muted">{a.dietary}</div>}
                     </>
                   ) : (
@@ -139,7 +161,12 @@ function AnswersEditor({ player, view, run, onClose }: { player: HostPlayer; vie
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
-    const ok = await run("guest.answers", { playerId: player.id, dish, category, dietary, facts: facts.split("\n") }, `Saved ${player.name}'s answers`);
+    const sameDish = a?.sharedWith && dish === a.dish && category === a.category && dietary === a.dietary;
+    const ok = await run(
+      "guest.answers",
+      { playerId: player.id, dish, category, dietary, facts: facts.split("\n"), sharedWith: sameDish ? a!.sharedWith : null },
+      `Saved ${player.name}'s answers`,
+    );
     if (ok) onClose();
   };
 

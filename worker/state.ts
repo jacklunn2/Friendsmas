@@ -53,6 +53,8 @@ export interface Questionnaire {
   facts: { id: string; text: string }[];
   completedAt: number;
   updatedAt: number;
+  /** Bringing another guest's dish with them. Their own dish fields keep a copy, used if that guest leaves. */
+  sharedWith?: string | null;
 }
 
 export interface ServerTeam {
