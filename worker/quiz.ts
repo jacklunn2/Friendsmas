@@ -15,7 +15,10 @@ import {
   formatNumber,
   teamDisplayName,
   VOTE_TYPES,
+  DEFAULT_MASH_NAMES,
+  MASH_NAME_MAX,
   MAX_MASH_GUESTS,
+  MAX_MASH_NAMES,
   type HostQuizAnswer,
   type MashAnswer,
   type PollOptionsKind,
@@ -136,11 +139,18 @@ export function parseMash(value: string): MashAnswer {
   }
 }
 
-/** How many of the guests are right (any order, each counted once), and how the celebrity was marked. */
+const nameKey = (n: string) => n.trim().toLocaleLowerCase();
+
+/** The names teams pick from. */
+export function mashNames(s: ServerState): string[] {
+  return s.mashNames ?? [...DEFAULT_MASH_NAMES];
+}
+
+/** How many of the names are right (any order, each counted once), and how the celebrity was marked. */
 export function mashMark(q: Question, value: string): { guestsRight: number; celebrity: "correct" | "close" | "wrong" | null } {
   const a = parseMash(value);
-  const want = new Set(q.pickIds ?? []);
-  const guestsRight = new Set(a.guests.filter((g) => want.has(g))).size;
+  const want = new Set((q.pickNames ?? []).map(nameKey));
+  const guestsRight = new Set(a.guests.map(nameKey).filter((g) => want.has(g))).size;
   const celebrity = q.accepted.length ? autoMark({ ...q, type: "text" }, a.celebrity, null) : null;
   return { guestsRight, celebrity };
 }
@@ -226,12 +236,12 @@ export function markAnswers(s: ServerState, quiz: Activity, q: Question): HostQu
         const m = mashMark(q, a.value);
         const override = answererId in overrides ? overrides[answererId] : null;
         const celebRight = m.celebrity === null ? null : (override ?? m.celebrity === "correct");
-        const guests = q.pickIds?.length ?? 0;
+        const guests = q.pickNames?.length ?? 0;
         const total = guests + (m.celebrity === null ? 0 : 1);
         const right = m.guestsRight + (celebRight ? 1 : 0);
         const points = right * base + (total > 0 && right === total ? (q.bonus ?? 0) : 0);
         const auto: "correct" | "close" | "wrong" = m.celebrity === "close" ? "close" : right === total ? "correct" : "wrong";
-        const detail = `${m.guestsRight} of ${guests} ${guests === 1 ? "friend" : "friends"}${celebRight === null ? "" : celebRight ? ", celebrity right" : ", celebrity wrong"}`;
+        const detail = `${m.guestsRight} of ${guests} ${guests === 1 ? "person" : "people"}${celebRight === null ? "" : celebRight ? ", celebrity right" : ", celebrity wrong"}`;
         return { answererId, value: a.value, byPlayerId: a.by, at: a.at, auto, override, correct: points > 0, points, detail };
       }
       const auto = autoMark(q, a.value, ctx.closest, { ctx, answererTeamId: teamOf(answererId) });
@@ -351,14 +361,18 @@ export function questionFields(p: Payload, s?: ServerState): Omit<Question, "id"
   let accepted: string[] = [];
   let optionsKind: PollOptionsKind = "custom";
   let factId: string | null = null;
-  let pickIds: string[] = [];
+  let pickNames: string[] = [];
   let bonus: number | null = null;
   let answerImageId: string | null = null;
   if (type === "facemash") {
-    pickIds = [...new Set((Array.isArray(p.pickIds) ? p.pickIds : []).filter((x): x is string => typeof x === "string"))];
-    if (!pickIds.length) throw new UserError("Choose the guests in the face mash.");
-    if (pickIds.length > MAX_MASH_GUESTS) throw new UserError(`A face mash can have up to ${MAX_MASH_GUESTS} guests.`);
-    if (s && pickIds.some((id) => !s.players.some((pl) => pl.id === id))) throw new UserError("One of those guests is no longer on the guest list.");
+    pickNames = [...new Set((Array.isArray(p.pickNames) ? p.pickNames : []).filter((x): x is string => typeof x === "string").map((x) => x.trim()))].filter(Boolean);
+    if (!pickNames.length) throw new UserError("Choose who's in the face mash.");
+    if (pickNames.length > MAX_MASH_GUESTS) throw new UserError(`A face mash can have up to ${MAX_MASH_GUESTS} people.`);
+    if (s) {
+      const allowed = new Map(mashNames(s).map((n) => [nameKey(n), n]));
+      if (pickNames.some((n) => !allowed.has(nameKey(n)))) throw new UserError("Choose names from the face mash names list.");
+      pickNames = pickNames.map((n) => allowed.get(nameKey(n))!);
+    }
     accepted = (Array.isArray(p.accepted) ? p.accepted : []).map((o) => cleanLine(o, ANSWER_MAX, "The celebrity")).filter(Boolean);
     bonus = p.bonus === null || p.bonus === undefined || p.bonus === "" ? null : int(p, "bonus", { min: 0, max: MAX_POINTS, label: "the bonus" });
     if (p.answerImageId !== null && p.answerImageId !== undefined && p.answerImageId !== "") {
@@ -400,7 +414,7 @@ export function questionFields(p: Payload, s?: ServerState): Omit<Question, "id"
     if (typeof p.videoId !== "string" || (s && !s.videos.some((v) => v.id === p.videoId))) throw new UserError("That video no longer exists.");
     videoId = p.videoId;
   }
-  return { type, prompt, options, correctIndex, numberAnswer, accepted, points, seconds, notes, fact, videoId, optionsKind, factId, pickIds, bonus, answerImageId };
+  return { type, prompt, options, correctIndex, numberAnswer, accepted, points, seconds, notes, fact, videoId, optionsKind, factId, pickNames, bonus, answerImageId };
 }
 
 /**
@@ -548,6 +562,20 @@ export function quizAlarm(s: ServerState, now: number): boolean {
 }
 
 export const quizHost: Record<string, Handler> = {
+  /** The names teams pick from in face mash questions. */
+  "quiz.mashNames": (s, _a, p) => {
+    const names = (Array.isArray(p.names) ? p.names : [])
+      .map((n) => (typeof n === "string" ? n.trim().replace(/\s+/g, " ") : ""))
+      .filter(Boolean);
+    const seen = new Set<string>();
+    const unique = names.filter((n) => !seen.has(nameKey(n)) && !!seen.add(nameKey(n)));
+    if (unique.length < 2) throw new UserError("Give at least two names.");
+    if (unique.length > MAX_MASH_NAMES) throw new UserError(`Give at most ${MAX_MASH_NAMES} names.`);
+    if (unique.some((n) => n.length > MASH_NAME_MAX)) throw new UserError(`Names must be ${MASH_NAME_MAX} characters or fewer.`);
+    s.mashNames = unique;
+    return { audit: ["quiz.mashNames", `Face mash names: ${unique.join(", ")}`] };
+  },
+
   "quiz.question.save": (s, _a, p, now) => {
     const quiz = findQuiz(s, p.activityId);
     const fields = questionFields((p.question ?? {}) as Payload, s);
@@ -703,10 +731,11 @@ export const quizPlayer: Record<string, Handler> = {
     let value: string;
     if (q.type === "facemash") {
       const v = (p.value ?? {}) as Partial<MashAnswer>;
-      const inPlay = new Set(guestsInPlay(s, true).map((x) => x.id));
-      const guests = [...new Set(Array.isArray(v.guests) ? v.guests : [])];
-      if (guests.some((g) => typeof g !== "string" || !inPlay.has(g))) throw new UserError("Pick guests from the list.");
-      if (guests.length > (q.pickIds?.length ?? 0)) throw new UserError(`Pick up to ${q.pickIds?.length ?? 0} guests.`);
+      const allowed = new Map(mashNames(s).map((n) => [nameKey(n), n]));
+      const raw = Array.isArray(v.guests) ? v.guests : [];
+      if (raw.some((g) => typeof g !== "string" || !allowed.has(nameKey(g)))) throw new UserError("Pick names from the list.");
+      const guests = [...new Set(raw.map((g) => allowed.get(nameKey(g as string))!))];
+      if (guests.length > (q.pickNames?.length ?? 0)) throw new UserError(`Pick up to ${q.pickNames?.length ?? 0} names.`);
       const celebrity = q.accepted.length ? cleanLine(v.celebrity, ANSWER_MAX, "The celebrity") : "";
       if (!guests.length && !celebrity) throw new UserError("Pick a guest or name the celebrity first.");
       value = JSON.stringify({ guests, celebrity });
@@ -776,7 +805,7 @@ export function quizView(s: ServerState, revealAnswers: boolean): QuizView | nul
         : q.type === "whowrote"
           ? (s.players.find((p) => p.id === ctx.writerId)?.name ?? "A guest")
           : q.type === "facemash"
-            ? [...(q.pickIds ?? []).map((id) => s.players.find((p) => p.id === id)?.name ?? "A guest"), ...(q.accepted[0] ? [q.accepted[0]] : [])].join(" + ")
+            ? [...(q.pickNames ?? []), ...(q.accepted[0] ? [q.accepted[0]] : [])].join(" + ")
             : answerText(q);
     reveal = {
       answer,
@@ -785,7 +814,7 @@ export function quizView(s: ServerState, revealAnswers: boolean): QuizView | nul
       counts: voting ? ctx.counts : null,
       winners: ctx.winners,
       writerId: q.type === "whowrote" ? ctx.writerId : null,
-      pickIds: q.type === "facemash" ? [...(q.pickIds ?? [])] : [],
+      pickNames: q.type === "facemash" ? [...(q.pickNames ?? [])] : [],
       answerImageId: q.type === "facemash" ? (q.answerImageId ?? null) : null,
     };
   }
@@ -805,7 +834,7 @@ export function quizView(s: ServerState, revealAnswers: boolean): QuizView | nul
           options: q.options,
           choices,
           optionsKind: q.type === "poll" ? (q.optionsKind ?? "custom") : q.type === "whowrote" ? "players" : null,
-          mash: q.type === "facemash" ? { guests: q.pickIds?.length ?? 0, celebrity: q.accepted.length > 0 } : null,
+          mash: q.type === "facemash" ? { guests: q.pickNames?.length ?? 0, names: [...mashNames(s)], celebrity: q.accepted.length > 0 } : null,
           imageId: q.imageId,
           points: pointsFor(quiz, q),
         }
@@ -823,7 +852,7 @@ export function questionView(q: Question): QuestionView {
     videoId: q.videoId ?? null,
     optionsKind: q.optionsKind ?? "custom",
     factId: q.factId ?? null,
-    pickIds: [...(q.pickIds ?? [])],
+    pickNames: [...(q.pickNames ?? [])],
     bonus: q.bonus ?? null,
     answerImageId: q.answerImageId ?? null,
   };

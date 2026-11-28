@@ -107,12 +107,12 @@ export function QuizStage({ view, serverNow }: { view: StageView; serverNow: () 
               <div className="mash-reveal">
                 {qz.reveal!.answerImageId && <img className="mash-reveal__photo" src={imageUrl(qz.reveal!.answerImageId, view.eventCode)} alt="The originals" />}
                 <ul className="mash-reveal__who">
-                  {qz.reveal!.pickIds.map((id) => {
-                    const p = players.get(id);
+                  {qz.reveal!.pickNames.map((n) => {
+                    const p = view.players.find((x) => x.name.toLocaleLowerCase() === n.toLocaleLowerCase());
                     return (
-                      <li key={id} className="quiz-face">
+                      <li key={n} className="quiz-face">
                         {p && <Avatar player={p} className="quiz-face__photo" />}
-                        <span className="quiz-face__name">{p?.name ?? "A guest"}</span>
+                        <span className="quiz-face__name">{n}</span>
                       </li>
                     );
                   })}
@@ -124,7 +124,7 @@ export function QuizStage({ view, serverNow }: { view: StageView; serverNow: () 
               </div>
             ) : (
               <p className="quiz-q__type-hint">
-                Pick the {mash.guests === 1 ? "friend" : `${mash.guests} friends`} in it on your phone
+                Tick the {mash.guests === 1 ? "person" : `${mash.guests} people`} in it on your phone
                 {mash.celebrity ? " and type the celebrity" : ""}. A point for each one you get, plus a bonus for all of them.
               </p>
             )

@@ -148,45 +148,67 @@ describe("question types in a round", () => {
 describe("face mash", () => {
   function mash(s: ServerState, extra: Record<string, unknown> = {}) {
     const r1 = round(s, 1);
-    const [a, b] = s.players;
-    addQ(s, r1, { type: "facemash", prompt: "Who's in the mash?", pickIds: [a.id, b.id], accepted: ["Ed Sheeran", "Sheeran"], points: 1, bonus: 2, ...extra });
+    addQ(s, r1, { type: "facemash", prompt: "Who's in the mash?", pickNames: ["Jack", "fleur", "Ned"], accepted: [], points: 1, bonus: 2, ...extra });
     runAction(s, HOST, "quiz.start", { activityId: r1 }, T0);
     runAction(s, HOST, "quiz.open", { index: 0 }, T0);
-    return { r1, a, b, qid: stageView(s, T0).quiz!.question!.id };
+    return { r1, qid: stageView(s, T0).quiz!.question!.id };
   }
 
-  it("scores each guest picked in any order, the celebrity, and a bonus for all three", () => {
+  it("ticks names from the list in any order: a point each, plus a bonus for all of them", () => {
     const s = ready();
-    const { r1, a, b, qid } = mash(s);
+    const { r1, qid } = mash(s);
     const [t1, t2, t3] = s.teams;
-    expect(stageView(s, T0).quiz!.question!.mash).toEqual({ guests: 2, celebrity: true });
-    const answer = (t: (typeof s.teams)[number], value: unknown) => runAction(s, player(t.memberIds[0]), "quiz.answer", { questionId: qid, value }, T0);
-    answer(t1, { guests: [b.id, a.id], celebrity: "ed sheeran" }); // all three, other order
-    answer(t2, { guests: [a.id, a.id], celebrity: "Taylor Swift" }); // one guest (twice counts once)
-    answer(t3, { guests: [s.players[5].id], celebrity: "Ed Sheran" }); // a near miss
-    runAction(s, HOST, "quiz.close", {}, T0);
-    const host = hostView(s, [], T0).quizAnswers;
-    expect(host.find((x) => x.answererId === t3.id)!.auto).toBe("close");
+    const live = stageView(s, T0).quiz!.question!.mash!;
+    expect(live).toMatchObject({ guests: 3, celebrity: false });
+    expect(live.names).toContain("Tallulah");
+    const answer = (t: (typeof s.teams)[number], guests: string[]) =>
+      runAction(s, player(t.memberIds[0]), "quiz.answer", { questionId: qid, value: { guests, celebrity: "" } }, T0);
+    answer(t1, ["Ned", "Fleur", "Jack"]); // all three, another order
+    answer(t2, ["jack", "Amy"]); // one right (any case)
+    answer(t3, ["Izzy", "Pat", "Amber"]);
     runAction(s, HOST, "quiz.reveal", {}, T0);
     expect(roundPoints(s, r1, t1.id)).toBe(1 + 1 + 1 + 2);
     expect(roundPoints(s, r1, t2.id)).toBe(1);
     expect(roundPoints(s, r1, t3.id)).toBe(0);
-    // The host accepts t3's spelling: the celebrity now counts.
-    runAction(s, HOST, "quiz.mark", { answererId: t3.id, correct: true }, T0);
-    expect(roundPoints(s, r1, t3.id)).toBe(1);
     const reveal = stageView(s, T0).quiz!.reveal!;
-    expect(reveal.pickIds).toEqual([a.id, b.id]);
-    expect(reveal.answer).toBe(`${a.name} + ${b.name} + Ed Sheeran`);
+    expect(reveal.pickNames).toEqual(["Jack", "Fleur", "Ned"]);
+    expect(reveal.answer).toBe("Jack + Fleur + Ned");
   });
 
-  it("only accepts guests from the list, no more than the mash has", () => {
+  it("only takes names from the list, no more than the mash has, and the host can change the list", () => {
     const s = ready();
     const { qid } = mash(s);
+    const me = player(s.teams[0].memberIds[0]);
+    const send = (guests: string[]) => runAction(s, me, "quiz.answer", { questionId: qid, value: { guests, celebrity: "" } }, T0);
+    expect(() => send(["Santa"])).toThrow(/from the list/);
+    expect(() => send(["Jack", "Fleur", "Ned", "Amy"])).toThrow(/up to 3/);
+    expect(() => send([])).toThrow(/Pick/);
+    runAction(s, HOST, "quiz.mashNames", { names: ["Jack", "Fleur", "Ned", "Rudolph", " jack "] }, T0);
+    expect(hostView(s, [], T0).mashNames).toEqual(["Jack", "Fleur", "Ned", "Rudolph"]);
+    expect(() => addQ(s, round(s, 2), { type: "facemash", pickNames: ["Amy"] })).toThrow(/names list/);
+  });
+
+  it("turns face mashes saved the old way (guest ids) into names", () => {
+    const s = ready();
+    const r1 = s.activities.find((a) => a.id === round(s, 1))!;
+    const [a, b] = s.players;
+    r1.questions!.push({ id: "old", type: "facemash", prompt: "Old", options: [], correctIndex: 0, numberAnswer: null, accepted: [], imageId: null, points: null, seconds: null, notes: "", fact: "", pickIds: [a.id, b.id] } as never);
+    migrate(s);
+    expect(r1.questions![0].pickNames).toEqual([a.name, b.name]);
+    expect((r1.questions![0] as { pickIds?: unknown }).pickIds).toBeUndefined();
+  });
+
+  it("can still include a celebrity, with near misses for the host to check", () => {
+    const s = ready();
+    const { r1, qid } = mash(s, { pickNames: ["Jack"], accepted: ["Ed Sheeran"] });
     const t1 = s.teams[0];
-    const me = player(t1.memberIds[0]);
-    expect(() => runAction(s, me, "quiz.answer", { questionId: qid, value: { guests: ["nobody"], celebrity: "" } }, T0)).toThrow(/from the list/);
-    expect(() => runAction(s, me, "quiz.answer", { questionId: qid, value: { guests: s.players.slice(0, 3).map((p) => p.id), celebrity: "" } }, T0)).toThrow(/up to 2/);
-    expect(() => runAction(s, me, "quiz.answer", { questionId: qid, value: { guests: [], celebrity: " " } }, T0)).toThrow(/Pick a guest/);
+    runAction(s, player(t1.memberIds[0]), "quiz.answer", { questionId: qid, value: { guests: ["Jack"], celebrity: "Ed Sheran" } }, T0);
+    runAction(s, HOST, "quiz.close", {}, T0);
+    expect(hostView(s, [], T0).quizAnswers[0].auto).toBe("close");
+    runAction(s, HOST, "quiz.reveal", {}, T0);
+    expect(roundPoints(s, r1, t1.id)).toBe(1);
+    runAction(s, HOST, "quiz.mark", { answererId: t1.id, correct: true }, T0);
+    expect(roundPoints(s, r1, t1.id)).toBe(1 + 1 + 2);
   });
 });
 

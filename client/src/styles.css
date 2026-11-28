@@ -5650,3 +5650,57 @@ img.member__emoji {
 .quest__role > button {
   flex: 1 1 0;
 }
+
+/* Phones: ticking names in a face mash */
+.mash-names {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+}
+.mash-name {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 12px;
+  border: 1px solid var(--spruce-line);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.mash-name.is-chosen {
+  border-color: var(--brass);
+  background: rgba(242, 181, 68, 0.14);
+}
+.mash-name:disabled:not(.is-chosen) {
+  opacity: 0.5;
+}
+.mash-name__tick {
+  width: 1.2rem;
+  height: 1.2rem;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  border: 2px solid var(--mist);
+  font-size: 0.8rem;
+  color: var(--pine, #10241e);
+}
+.mash-name.is-chosen .mash-name__tick {
+  background: var(--brass);
+  border-color: var(--brass);
+}
+.mash-name__photo {
+  width: 1.6rem;
+  height: 1.6rem;
+  font-size: 0.9rem;
+  border-radius: 50%;
+  flex: none;
+}

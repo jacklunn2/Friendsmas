@@ -14,7 +14,7 @@ import type {
   PublicView,
   StageView,
 } from "../shared/types";
-import { HOUSE_ID } from "../shared/types";
+import { DEFAULT_MASH_NAMES, HOUSE_ID } from "../shared/types";
 import { revealedIds, spinCooldownUntil } from "./logic";
 import { foodWarnings, menuView, questionnaireView } from "./guests";
 import { hostMissionsView, missionsRevealView, myMissionView } from "./missions";
@@ -206,6 +206,7 @@ export function hostView(s: ServerState, audit: AuditEntry[], now: number): Host
     ...view,
     role: "host",
     runSheet: [...(s.runSheet ?? [])],
+    mashNames: [...(s.mashNames ?? DEFAULT_MASH_NAMES)],
     roster: s.players.map((p) => ({
       ...publicPlayer(p, revealed),
       hasDevice: !!p.token,

@@ -248,7 +248,7 @@ function QuestionBody({ q, view, showAnswer }: { q: QuestionView; view: HostView
         )}
         {q.type === "facemash" && showAnswer && (
           <p className="qbody__answer">
-            In it: <strong>{[...q.pickIds.map((id) => view.roster.find((p) => p.id === id)?.name ?? "?"), ...(q.accepted[0] ? [q.accepted[0]] : [])].join(" + ")}</strong>
+            In it: <strong>{[...q.pickNames, ...(q.accepted[0] ? [q.accepted[0]] : [])].join(" + ")}</strong>
             {q.bonus ? ` · +${q.bonus} for all of them` : ""}
           </p>
         )}
@@ -313,7 +313,7 @@ function Answers({
   const mashShown = (ans: HostQuizAnswer) => {
     try {
       const v = JSON.parse(ans.value) as { guests: string[]; celebrity: string };
-      const names = v.guests.map((id) => players.get(id)?.name ?? "?");
+      const names = v.guests;
       return [...names, ...(v.celebrity ? [`“${v.celebrity}”`] : [])].join(" + ");
     } catch {
       return ans.value;
@@ -431,7 +431,7 @@ function QuestionBank({ activity: a, view, run }: { activity: ActivityView; view
                   {q.type === "whowrote"
                     ? `written by ${factLookup(view, q.factId)?.writer ?? "?"}`
                     : q.type === "facemash"
-                      ? [...q.pickIds.map((id) => view.roster.find((p) => p.id === id)?.name ?? "?"), ...(q.accepted[0] ? [q.accepted[0]] : [])].join(" + ")
+                      ? [...q.pickNames, ...(q.accepted[0] ? [q.accepted[0]] : [])].join(" + ")
                       : answerText(q)}
                   {q.imageId ? " · photo" : ""}
                   {q.videoId ? " · video" : ""}
@@ -486,7 +486,7 @@ function QuestionForm({
   const [optionsKind, setOptionsKind] = useState<PollOptionsKind>(question?.optionsKind ?? "custom");
   const [factId, setFactId] = useState<string>(question?.factId ?? "");
   const [videoId, setVideoId] = useState<string>(question?.videoId ?? "");
-  const [pickIds, setPickIds] = useState<string[]>(question?.pickIds ?? []);
+  const [pickNames, setPickNames] = useState<string[]>(question?.pickNames ?? []);
   const [bonus, setBonus] = useState(question?.bonus != null ? String(question.bonus) : "2");
   const [answerImageId, setAnswerImageId] = useState<string | null>(question?.answerImageId ?? null);
   const answerFile = useRef<HTMLInputElement>(null);
@@ -539,7 +539,7 @@ function QuestionForm({
           videoId: videoId || null,
           optionsKind,
           factId: factId || null,
-          pickIds,
+          pickNames,
           bonus: bonus === "" ? null : Number(bonus),
           answerImageId,
           points: points === "" ? null : Number(points),
@@ -561,7 +561,7 @@ function QuestionForm({
       setImageId(null);
       setVideoId("");
       setFactId("");
-      setPickIds([]);
+      setPickNames([]);
       setAnswerImageId(null);
       setNotes("");
       setFact("");
@@ -702,28 +702,26 @@ function QuestionForm({
         <fieldset className="choice">
           <legend className="choice__legend">Who's in the mash (up to {MAX_MASH_GUESTS})</legend>
           <div className="mash-pick">
-            {view.roster
-              .filter((p) => p.status !== "pending")
-              .sort((x, y) => x.name.localeCompare(y.name))
-              .map((p) => {
-                const on = pickIds.includes(p.id);
-                return (
-                  <label key={p.id} className={`mash-pick__guest${on ? " is-on" : ""}`}>
-                    <input
-                      type="checkbox"
-                      checked={on}
-                      disabled={!on && pickIds.length >= MAX_MASH_GUESTS}
-                      onChange={() => setPickIds(on ? pickIds.filter((x) => x !== p.id) : [...pickIds, p.id])}
-                    />
-                    {p.name}
-                  </label>
-                );
-              })}
+            {view.mashNames.map((n) => {
+              const on = pickNames.includes(n);
+              return (
+                <label key={n} className={`mash-pick__guest${on ? " is-on" : ""}`}>
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    disabled={!on && pickNames.length >= MAX_MASH_GUESTS}
+                    onChange={() => setPickNames(on ? pickNames.filter((x) => x !== n) : [...pickNames, n])}
+                  />
+                  {n}
+                </label>
+              );
+            })}
           </div>
+          <MashNamesEditor view={view} run={run} />
           <label className="field">
-            <span className="field__label">The celebrity, with any other spellings to accept, one per line (leave empty for no celebrity)</span>
+            <span className="field__label">A celebrity too? Type them, with other spellings to accept, one per line (leave empty for none)</span>
             <textarea className="input input--area" rows={2} maxLength={ANSWER_MAX * 6} value={accepted} onChange={(e) => setAccepted(e.target.value)} />
-            <span className="host__muted">Teams pick the guests from everyone's photos, in any order, and type the celebrity. Near misses come to you to check.</span>
+            <span className="host__muted">Teams tick the names from the list, in any order. A point for each one right, plus the bonus for all of them.</span>
           </label>
           <label className="field field--inline">
             <span className="field__label">Bonus for getting everyone right</span>
@@ -808,6 +806,46 @@ function QuestionForm({
         </button>
       </div>
     </form>
+  );
+}
+
+/** The names teams pick from in face mash questions, shared by every face mash. */
+function MashNamesEditor({ view, run }: { view: HostView; run: Run }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState(view.mashNames.join("\n"));
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className="btn btn--small btn--ghost"
+        onClick={() => {
+          setText(view.mashNames.join("\n"));
+          setOpen(true);
+        }}
+      >
+        Edit the names list (used by every face mash)
+      </button>
+    );
+  }
+  return (
+    <div className="field">
+      <span className="field__label">Names teams pick from, one per line</span>
+      <textarea className="input input--area" rows={6} value={text} onChange={(e) => setText(e.target.value)} />
+      <div className="row__actions">
+        <button
+          type="button"
+          className="btn btn--small btn--secondary"
+          onClick={async () => {
+            if (await run("quiz.mashNames", { names: text.split("\n") }, "Names list saved")) setOpen(false);
+          }}
+        >
+          Save the names
+        </button>
+        <button type="button" className="btn btn--small btn--ghost" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+    </div>
   );
 }
 

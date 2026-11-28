@@ -21,6 +21,10 @@ export type ActivityFormat = "live" | "quiz" | "poll";
 export type QuestionType = "choice" | "truefalse" | "number" | "text" | "poll" | "whowrote" | "facemash";
 /** Face mash: the most guests a mash can blend. */
 export const MAX_MASH_GUESTS = 4;
+/** The names teams pick from in a face mash. The host can change the list. */
+export const DEFAULT_MASH_NAMES = ["Jack", "Fleur", "Arabella", "Tallulah", "Finn", "Harry", "Pat", "Amy", "Carissa", "Amber", "Callan", "Izzy", "Ned"];
+export const MASH_NAME_MAX = 30;
+export const MAX_MASH_NAMES = 40;
 /** Question types where teams pick from a list worked out at the time (guests, teams or the host's options). */
 export const VOTE_TYPES: QuestionType[] = ["poll", "whowrote"];
 export type QuizPhase = "intro" | "open" | "closed" | "revealed";
@@ -134,8 +138,8 @@ export interface QuestionView {
   optionsKind: PollOptionsKind;
   /** "Who wrote this?": the guest's secret fact it uses. */
   factId: string | null;
-  /** Face mash: the guests blended into the photo. (The celebrity's spellings are in `accepted`.) */
-  pickIds: string[];
+  /** Face mash: the names of the people blended into the photo, from the face mash names list. (Any celebrity's spellings are in `accepted`.) */
+  pickNames: string[];
   /** Face mash: extra points for getting every face right. */
   bonus: number | null;
   /** Face mash: a photo shown at the reveal (say, the originals side by side). */
@@ -158,8 +162,8 @@ export interface LiveQuestion {
   /** Polls and "Who wrote this?": what teams pick between. */
   choices: PollOptionView[] | null;
   optionsKind: PollOptionsKind | null;
-  /** Face mash: how many guests to pick, and whether there's a celebrity to name. */
-  mash: { guests: number; celebrity: boolean } | null;
+  /** Face mash: how many names to pick, the names to pick from, and whether there's a celebrity to type. */
+  mash: { guests: number; names: string[]; celebrity: boolean } | null;
   imageId: string | null;
   points: number;
 }
@@ -197,7 +201,7 @@ export interface QuizView {
     /** "Who wrote this?": the writer. */
     writerId: string | null;
     /** Face mash: the guests in it, and the answer photo. */
-    pickIds: string[];
+    pickNames: string[];
     answerImageId: string | null;
   } | null;
 }
@@ -669,6 +673,8 @@ export interface HostView extends PublicView {
   role: "host";
   /** The day's running order: activity ids, quiz rounds and Beat the House rounds alternating. */
   runSheet: string[];
+  /** The names teams pick from in face mash questions. */
+  mashNames: string[];
   roster: HostPlayer[];
   audit: AuditEntry[];
   spinCooldownUntil: number | null;

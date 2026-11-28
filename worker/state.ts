@@ -1,3 +1,4 @@
+import { DEFAULT_MASH_NAMES } from "../shared/types";
 import type {
   AgendaItem,
   Memory,
@@ -104,7 +105,7 @@ export interface Question {
   /** "Who wrote this?" questions: the secret fact. */
   factId?: string | null;
   /** Face mash: the guests in the photo, the bonus for all of them, and the answer photo. */
-  pickIds?: string[];
+  pickNames?: string[];
   bonus?: number | null;
   answerImageId?: string | null;
   points: number | null;
@@ -250,6 +251,8 @@ export interface ServerState {
   videoSeq: number;
   /** The day's running order (activity ids): quiz rounds and Beat the House rounds. Made on first load. */
   runSheet?: string[];
+  /** The names teams pick from in face mash questions. */
+  mashNames?: string[];
 }
 
 export interface MissionAssignment {
@@ -320,7 +323,16 @@ export function migrate(s: ServerState): ServerState {
     delete old.rerollUsed;
   }
   ensureRunSheet(s, s.createdAt);
+  s.mashNames ??= [...DEFAULT_MASH_NAMES];
   for (const a of s.activities) {
+    // Face mash questions written before the names list picked guests by id: turn them into names.
+    for (const q of a.questions ?? []) {
+      const legacy = q as Question & { pickIds?: string[] };
+      if (legacy.pickIds && !q.pickNames?.length) {
+        q.pickNames = legacy.pickIds.map((id) => s.players.find((p) => p.id === id)?.name).filter((n): n is string => !!n);
+      }
+      delete legacy.pickIds;
+    }
     a.format ??= "live";
     a.speedBonus ??= 0;
     a.questionSeconds ??= 30;

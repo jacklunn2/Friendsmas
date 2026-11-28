@@ -71,7 +71,7 @@ export function PhoneQuiz({ view, send, serverNow }: { view: PlayerView; send: S
   const mashText = (v: string) => {
     try {
       const m = JSON.parse(v) as { guests: string[]; celebrity: string };
-      return [...m.guests.map((id) => players.get(id)?.name ?? "?"), ...(m.celebrity ? [m.celebrity] : [])].join(" + ");
+      return [...m.guests, ...(m.celebrity ? [m.celebrity] : [])].join(" + ");
     } catch {
       return v;
     }
@@ -129,7 +129,8 @@ export function PhoneQuiz({ view, send, serverNow }: { view: PlayerView; send: S
           key={q.id}
           need={q.mash.guests}
           celebrity={q.mash.celebrity}
-          guests={view.players.filter((p) => p.teamId && p.status !== "pending").sort((a, b) => a.name.localeCompare(b.name))}
+          names={q.mash.names}
+          players={view.players}
           picked={picked}
           setPicked={setPicked}
           typed={typed}
@@ -224,7 +225,8 @@ export function PhoneQuiz({ view, send, serverNow }: { view: PlayerView; send: S
 function MashForm({
   need,
   celebrity,
-  guests,
+  names,
+  players,
   picked,
   setPicked,
   typed,
@@ -236,7 +238,8 @@ function MashForm({
 }: {
   need: number;
   celebrity: boolean;
-  guests: PlayerView["players"];
+  names: string[];
+  players: PlayerView["players"];
   picked: string[];
   setPicked: (ids: string[]) => void;
   typed: string;
@@ -259,22 +262,26 @@ function MashForm({
       }}
     >
       <p className="phone__muted">
-        Tap the {need === 1 ? "friend" : `${need} friends`} in it ({picked.length} of {need}).
+        Tick the {need === 1 ? "person" : `${need} people`} in it, in any order ({picked.length} of {need}).
       </p>
-      <ul className="poll-options poll-options--players">
-        {guests.map((p) => {
-          const on = picked.includes(p.id);
+      <ul className="mash-names">
+        {names.map((n) => {
+          const on = picked.includes(n);
+          const who = players.find((p) => p.name.toLocaleLowerCase() === n.toLocaleLowerCase());
           return (
-            <li key={p.id}>
+            <li key={n}>
               <button
                 type="button"
-                className={`poll-option${on ? " is-chosen" : ""}`}
+                className={`mash-name${on ? " is-chosen" : ""}`}
                 aria-pressed={on}
                 disabled={!open || (!on && picked.length >= need)}
-                onClick={() => toggle(p.id)}
+                onClick={() => toggle(n)}
               >
-                <Avatar player={p} className="poll-option__photo" />
-                <span className="poll-option__label">{p.name}</span>
+                <span className="mash-name__tick" aria-hidden>
+                  {on ? "✓" : ""}
+                </span>
+                {who && <Avatar player={who} className="mash-name__photo" />}
+                <span>{n}</span>
               </button>
             </li>
           );
