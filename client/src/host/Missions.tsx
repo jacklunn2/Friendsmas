@@ -31,11 +31,14 @@ export function MissionsPanel({ view, run }: { view: HostView; run: Run }) {
         </span>
       </header>
       <p className="host__muted">
-        Each guest gets a different mission on their phone. Send them one at a time with Send a mission (random) or Choose…, or all at
-        once. It pops up on their phone straight away. Completed adds +{MISSION_POINTS} to their team, kept secret until the next leaderboard
-        reveal. Noticed fails the mission and voids the +{MISSION_POINTS}.
+        Write your missions below. Each guest gets a different one, picked at random from the list, and it pops up on their phone straight
+        away. Completed adds +{MISSION_POINTS} to their team, kept secret until the next leaderboard reveal. Noticed fails the mission and
+        voids the +{MISSION_POINTS}.
       </p>
 
+      <MissionList view={view} run={run} />
+
+      <h3 className="callout__title">Send them out at random</h3>
       <div className="row">
         <label className="switch">
           <input type="checkbox" checked={m.autoOnJoin} onChange={(e) => run("missions.auto", { on: e.target.checked })} />
@@ -208,7 +211,6 @@ export function MissionsPanel({ view, run }: { view: HostView; run: Run }) {
         </>
       )}
 
-      <MissionList view={view} run={run} />
     </section>
   );
 }
@@ -219,14 +221,27 @@ function MissionList({ view, run }: { view: HostView; run: Run }) {
   const [text, setText] = useState("");
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
 
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const room = MAX_MISSIONS - m.list.length;
   const add = async (e: FormEvent) => {
     e.preventDefault();
-    if (await run("missions.add", { text })) setText("");
+    let added = 0;
+    for (const line of lines.slice(0, room)) {
+      if (!(await run("missions.add", { text: line }))) break;
+      added++;
+    }
+    setText(lines.slice(added).join("\n"));
   };
 
   return (
-    <details className="history">
-      <summary className="history__summary">The missions list ({m.list.length})</summary>
+    <div className="mission-list-box">
+      <h3 className="callout__title">
+        Your missions ({m.list.length}){m.list.length > 0 && <span className="host__muted"> · {m.list.length - held.size} not handed out yet</span>}
+      </h3>
+      {!m.list.length && <p className="host__muted">No missions yet. Write some below.</p>}
       <ul className="plain-list mission-list">
         {m.list.map((x) => (
           <li key={x.id} className="mission-list__row">
@@ -267,18 +282,22 @@ function MissionList({ view, run }: { view: HostView; run: Run }) {
           </li>
         ))}
       </ul>
-      <form className="mission-list__edit" onSubmit={add}>
-        <input
-          className="input input--small"
-          placeholder="Write a new mission"
+      <form className="mission-list__add" onSubmit={add}>
+        <textarea
+          className="input"
+          rows={3}
+          placeholder={"Write missions here, one per line. Paste a whole list if you like."}
           value={text}
-          maxLength={MISSION_MAX}
           onChange={(e) => setText(e.target.value)}
         />
-        <button className="btn btn--small btn--secondary" disabled={!text.trim() || m.list.length >= MAX_MISSIONS}>
-          Add
-        </button>
+        <div className="row__actions">
+          <button className="btn btn--small btn--secondary" disabled={!lines.length || room <= 0 || lines.some((l) => l.length > MISSION_MAX)}>
+            {lines.length > 1 ? `Add ${Math.min(lines.length, room)} missions` : "Add to the list"}
+          </button>
+          {lines.some((l) => l.length > MISSION_MAX) && <span className="host__muted">Keep each mission under {MISSION_MAX} characters.</span>}
+          {room <= 0 && <span className="host__muted">The list is full ({MAX_MISSIONS} missions).</span>}
+        </div>
       </form>
-    </details>
+    </div>
   );
 }

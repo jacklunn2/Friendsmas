@@ -54,7 +54,7 @@ function Slideshow({ slides, index, code }: { slides: Slide[]; index: number; co
     <div className={`memories${s.winner ? " memories--winner" : ""}`}>
       {/* Only past winners get a title; memories speak for themselves. */}
       {s.winner && (
-        <h2 key={s.id} className="welcome__title memories__title">
+        <h2 key={`title-${s.id}`} className="welcome__title memories__title">
           Hall of Fame
         </h2>
       )}

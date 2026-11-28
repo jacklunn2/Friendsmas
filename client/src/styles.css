@@ -5390,3 +5390,26 @@ img.member__emoji {
   font-size: 2.8vw;
   margin-bottom: 0.6vw;
 }
+
+/* Control room: the missions list, written at the top of the panel */
+.mission-list-box {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.8rem;
+  border: 1px solid var(--spruce-line);
+  border-radius: 12px;
+}
+.mission-list-box .mission-list {
+  max-height: 18rem;
+  overflow-y: auto;
+}
+.mission-list__add {
+  display: grid;
+  gap: 0.5rem;
+}
+.mission-list__add textarea {
+  width: 100%;
+  resize: vertical;
+  font: inherit;
+}
