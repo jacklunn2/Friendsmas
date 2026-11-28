@@ -97,11 +97,13 @@ async function main() {
 
   // Start clean if a previous run left anything behind.
   await host.req("event.startFresh", { confirm: "START FRESH", clearGuests: true });
-  for (const a of host.view.activities.slice()) await host.req("activity.delete", { id: a.id }).catch(() => {});
+  // The running order's slots stay; anything else a previous run added goes.
+  for (const a of host.view.activities.filter((x) => !host.view.runSheet.includes(x.id))) await host.req("activity.delete", { id: a.id }).catch(() => {});
   for (const m of host.view.missions.list.filter((x) => x.text.startsWith("Rehearsal mission"))) await host.req("missions.delete", { id: m.id }).catch(() => {});
   await host.req("draw.options", { revealMode: "live", oddFallback: null });
   await host.req("guest.openJoin", { on: true });
-  await host.until((v) => v.roster.length === 0 && v.draw.oddFallback === null && v.activities.length === 0);
+  await host.until((v) => v.roster.length === 0 && v.draw.oddFallback === null && v.activities.length === v.runSheet.length);
+  check(host.view.runSheet.length === 7, "the running order has four quiz rounds and three Beat the House rounds");
 
   const code = host.view.eventCode;
   const badPhone = await new Client({ role: "player", code: "wrongcode" }).open();
@@ -562,6 +564,41 @@ async function main() {
   await host.req("video.delete", { id: begun.id });
   const gone = await fetch(`${BASE}/api/video/${begun.id}?c=${code}`);
   check(gone.status === 404, "a deleted clip is gone from storage");
+
+  // --- The running order: a quiz round with a poll and "Who wrote this?", and the House matching the lowest team
+  const round1 = host.view.runSheet[0];
+  // Clear out questions a previous rehearsal left in Round 1.
+  for (const q of host.view.questions[round1] ?? []) await host.req("quiz.question.delete", { activityId: round1, questionId: q.id });
+  const live = [...Object.values(phones), lou, avaAgain].filter((c) => c.ws?.readyState === 1 && c.view?.me?.teamId);
+  const onePerTeam = new Map();
+  for (const c of live) if (!onePerTeam.has(c.view.me.teamId)) onePerTeam.set(c.view.me.teamId, c);
+  const writer = live.find((c) => c.view.myQuestionnaire?.facts?.length);
+  await host.req("quiz.question.save", { activityId: round1, question: { type: "poll", prompt: "Best Christmas film?", optionsKind: "custom", options: ["Elf", "Home Alone"], points: 2 } });
+  await host.req("quiz.question.save", { activityId: round1, question: { type: "whowrote", factId: writer.view.myQuestionnaire.facts[0].id, points: 3 } });
+  await host.req("quiz.start", { activityId: round1 });
+  await host.req("quiz.open", { index: 0 });
+  await stage.until((v) => v.quiz?.question?.type === "poll" && v.quiz.phase === "open");
+  check(stage.view.quiz.question.choices.length === 2, "a poll question in a round shows its choices on the TV");
+  const voters = [...onePerTeam.values()];
+  for (const [i, c] of voters.entries()) await c.req("quiz.answer", { questionId: stage.view.quiz.question.id, value: i === 0 ? "0" : "1" });
+  await host.req("quiz.reveal");
+  await stage.until((v) => v.quiz?.phase === "revealed");
+  check(stage.view.quiz.reveal.answer === "Home Alone", "the poll's most popular answer wins");
+  await host.req("quiz.open");
+  await stage.until((v) => v.quiz?.question?.type === "whowrote" && v.quiz.phase === "open");
+  await writer.until((v) => v.myFactOnTv);
+  check(true, "the fact's writer is told it's theirs");
+  check(!JSON.stringify(stage.view).includes(`"writerId":"${writer.view.me.id}"`), "the TV doesn't know who wrote it before the reveal");
+  for (const c of voters) await c.req("quiz.answer", { questionId: stage.view.quiz.question.id, value: writer.view.me.id });
+  await host.req("quiz.reveal");
+  await stage.until((v) => v.quiz?.phase === "revealed");
+  const unmasked = stage.view.quiz.reveal;
+  check(unmasked.writerId === writer.view.me.id, "the TV unmasks the writer");
+  check(unmasked.results.find((r) => r.answererId === writer.view.me.teamId)?.correct === false, "the writer's team can't score on its own fact");
+  await host.until((v) => v.ledger.some((e) => e.activityId === round1 && e.teamId === "house" && !e.voided) || v.teams.some((t) => !v.ledger.some((e) => e.activityId === round1 && e.teamId === t.id && !e.voided)));
+  const roundTotal = (teamId) => host.view.ledger.filter((e) => !e.voided && e.activityId === round1 && e.teamId === teamId).reduce((n, e) => n + e.points, 0);
+  const lowest = Math.min(...host.view.teams.map((t) => roundTotal(t.id)));
+  check(roundTotal("house") === Math.max(0, lowest), "the House scores the same as the lowest team in the round");
 
   for (const c of [host, stage, intruder, badPhone, dupe, lou, avaAgain, ...Object.values(phones)]) {
     try {

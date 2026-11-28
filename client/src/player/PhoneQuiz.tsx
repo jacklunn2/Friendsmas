@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ANSWER_MAX, OPTION_LETTERS, formatNumber, imageUrl, signed, type PlayerView } from "../../../shared/types";
 import { useTicker } from "../net";
-import { formatClock } from "../ui";
+import { Avatar, formatClock, playerMap } from "../ui";
 
 type Send = <T = unknown>(action: string, payload?: Record<string, unknown>) => Promise<T>;
 
@@ -63,7 +63,18 @@ export function PhoneQuiz({ view, send, serverNow }: { view: PlayerView; send: S
 
   const left = qz.endsAt ? qz.endsAt - serverNow() : null;
   const choices = q.type === "choice" || q.type === "truefalse";
-  const shown = (v: string) => (choices ? `${q.type === "choice" ? `${OPTION_LETTERS[Number(v)]}: ` : ""}${q.options[Number(v)] ?? ""}` : q.type === "number" ? formatNumber(Number(v)) : v);
+  const voteChoices = q.choices;
+  const players = playerMap(view.players);
+  const teamsById = new Map(view.teams.map((t) => [t.id, t]));
+  const shown = (v: string) =>
+    voteChoices
+      ? (voteChoices.find((c) => c.key === v)?.label ?? "")
+      : choices
+        ? `${q.type === "choice" ? `${OPTION_LETTERS[Number(v)]}: ` : ""}${q.options[Number(v)] ?? ""}`
+        : q.type === "number"
+          ? formatNumber(Number(v))
+          : v;
+  const myFact = view.myFactOnTv;
   const myId = team ? me.teamId : me.id;
   const result = qz.reveal?.results.find((r) => r.answererId === myId);
 
@@ -80,17 +91,50 @@ export function PhoneQuiz({ view, send, serverNow }: { view: PlayerView; send: S
         </span>
         <span className="naming__clock">{open ? (left !== null ? formatClock(left) : "") : qz.phase === "closed" ? "Closed" : ""}</span>
       </div>
-      <p className="quiz-phone__prompt">{q.prompt}</p>
+      <p className="quiz-phone__prompt">{q.type === "whowrote" ? `Who wrote this? “${q.prompt}”` : q.prompt}</p>
       {q.imageId && <img className="quiz-phone__image" src={imageUrl(q.imageId, view.eventCode)} alt="" />}
 
+      {myFact && qz.phase !== "revealed" && (
+        <p className="poll-phone__mine">🤫 This one's yours! Keep a straight face. Your team can't score on it, so answer anything to keep the secret.</p>
+      )}
       {qz.phase === "revealed" ? (
         <div className={`quiz-phone__result ${result?.correct ? "is-right" : "is-wrong"}`} role="status">
-          <p className="quiz-phone__verdict">{result?.correct ? `Right! ${signed(result.points)}${result.fastest ? " ⚡ fastest" : ""}` : mine ? "Not this time" : "No answer"}</p>
+          <p className="quiz-phone__verdict">
+            {result?.correct
+              ? `${q.type === "poll" ? "With the majority!" : "Right!"} ${signed(result.points)}${result.fastest ? " ⚡ fastest" : ""}`
+              : mine
+                ? "Not this time"
+                : "No answer"}
+          </p>
           <p>
-            The answer: <strong>{qz.reveal!.answer}</strong>
+            {q.type === "poll" ? "Most popular: " : q.type === "whowrote" ? "It was " : "The answer: "}
+            <strong>{qz.reveal!.answer}</strong>
           </p>
           {mine && !result?.correct && <p className="phone__muted">{team ? "Your team" : "You"} said {shown(mine.value)}.</p>}
         </div>
+      ) : voteChoices ? (
+        <ul className={`poll-options poll-options--${q.optionsKind ?? "custom"}`}>
+          {voteChoices
+            .filter((c) => !(q.optionsKind === "teams" && c.key === me.teamId))
+            .map((c) => {
+              const p = players.get(c.key);
+              const t = teamsById.get(c.key);
+              const chosen = mine?.value === c.key;
+              return (
+                <li key={c.key}>
+                  <button
+                    className={`poll-option${chosen ? " is-chosen" : ""}${pending === c.key ? " is-pending" : ""}`}
+                    disabled={!open}
+                    aria-pressed={chosen}
+                    onClick={() => answer(c.key)}
+                  >
+                    {p && <Avatar player={p} className="poll-option__photo" />}
+                    <span className="poll-option__label">{t ? (t.name ?? c.label) : c.label}</span>
+                  </button>
+                </li>
+              );
+            })}
+        </ul>
       ) : choices ? (
         <div className={`quiz-phone__options quiz-phone__options--${q.options.length}`}>
           {q.options.map((o, i) => {

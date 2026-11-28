@@ -5433,3 +5433,118 @@ img.member__emoji {
 .activity-clips__tools {
   margin-left: auto;
 }
+
+/* Control room: the running order */
+.run-sheet__title {
+  margin: 0 0 0.2rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--mist);
+}
+.run-sheet .activity-list__item {
+  grid-template-columns: 1.6rem minmax(0, 1fr);
+  column-gap: 0.5rem;
+}
+.run-sheet .activity-list__item > :not(.activity-list__step) {
+  grid-column: 2;
+}
+.activity-list__step {
+  grid-row: span 2;
+  align-self: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: var(--spruce);
+  color: var(--snow);
+}
+.activity-list__item--house .activity-list__step {
+  background: #5c5139;
+  color: #f3e6c4;
+}
+.activity-list__todo {
+  color: var(--brass);
+}
+.run-sheet__extras {
+  margin-top: 0.4rem;
+  display: grid;
+  gap: 0.35rem;
+}
+.run-sheet__extras summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--mist);
+}
+.bank__count {
+  margin: 0 0 0.5rem;
+}
+.bank__count.is-full {
+  color: var(--frost);
+}
+
+/* TV: polls and "Who wrote this?" inside a quiz round */
+.quiz-q__kicker {
+  margin: 0;
+  font-size: 1.8vw;
+  font-weight: 700;
+  color: var(--brass);
+}
+.quiz-q__prompt--fact {
+  font-family: var(--display);
+  font-weight: 400;
+  font-style: italic;
+}
+.quiz-faces {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.2vw;
+}
+.quiz-face {
+  display: grid;
+  justify-items: center;
+  gap: 0.3vw;
+}
+.quiz-face__photo {
+  width: 5vw;
+  height: 5vw;
+  font-size: 2.8vw;
+  border-radius: 50%;
+  background: var(--spruce);
+  border: 0.25vw solid var(--brass);
+}
+.quiz-face__name {
+  font-size: 1.1vw;
+  font-weight: 700;
+}
+.quiz-q__bars {
+  padding: 0;
+}
+.quiz-q__writer .unmask__photo {
+  width: min(14vw, 26vh);
+  height: min(14vw, 26vh);
+  font-size: min(8vw, 14vh);
+}
+
+/* TV and phones: the House on the leaderboard can win */
+.board-row--house.board-row--leader {
+  border-style: solid;
+  border-color: #d9c79d;
+}
+.winner__house-mark {
+  font-size: 9vw;
+  line-height: 1;
+}
+.standings-card__row--house {
+  border-left: 4px dashed #8a7a5c;
+  color: #d9c79d;
+}
+/* Poll options have no "right answer" radio. */
+.qform__option--plain {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}

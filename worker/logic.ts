@@ -25,7 +25,7 @@ import {
 } from "./common";
 import { pick, randomDigits, randomToken, shuffle } from "./random";
 import { guestsHost, guestsPlayer } from "./guests";
-import { houseHost } from "./house";
+import { houseHost, syncHouseRounds } from "./house";
 import { pollsHost, pollsPlayer } from "./polls";
 import { autoAssignMission, clearMissionAssignments, missionsHost, missionsPlayer } from "./missions";
 import { quizAlarm, quizHost, quizPlayer } from "./quiz";
@@ -597,7 +597,12 @@ const player: Record<string, Handler> = {
 
 /** Runs one client request against the state. Mutates `s` in place. */
 export function runAction(s: ServerState, actor: Actor, action: string, payload: Payload, now: number): ActionResult {
-  if (actor.role === "host" && host[action]) return host[action](s, actor, payload, now);
+  if (actor.role === "host" && host[action]) {
+    const r = host[action](s, actor, payload, now);
+    // The House's score in each quiz round follows the lowest team's.
+    if (syncHouseRounds(s, now) && r.noChange) return { ...r, noChange: false };
+    return r;
+  }
   if (actor.role === "player" && player[action]) {
     if (actor.playerId) {
       const me = s.players.find((x) => x.id === actor.playerId);

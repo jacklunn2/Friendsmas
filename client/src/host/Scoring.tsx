@@ -4,6 +4,7 @@ import {
   HOUSE_ID,
   MAX_POINTS,
   REASON_MAX,
+  ROUND_QUESTIONS,
   UNDO_MS,
   ordinal,
   signed,
@@ -29,7 +30,7 @@ import { QuizPad, quizSummary } from "./Quiz";
 export type Run = <T = unknown>(action: string, payload?: Record<string, unknown>, okText?: string) => Promise<T | undefined>;
 export type Notify = (toast: { kind: "ok" | "error"; text: string; action?: { label: string; onClick: () => void }; ms?: number }) => void;
 
-type Selection = { type: "activity"; id: string } | { type: "new" } | { type: "edit"; id: string } | { type: "adjust" } | null;
+type Selection = { type: "activity"; id: string } | { type: "edit"; id: string } | { type: "adjust" } | null;
 
 interface Props {
   view: HostView;
@@ -40,16 +41,17 @@ interface Props {
 
 export function ScoringPanel({ view, run, notify, serverNow }: Props) {
   const ready = view.draw.phase === "complete";
-  const [sel, setSel] = useState<Selection>(() => (view.activities[0] ? { type: "activity", id: view.activities[0].id } : null));
+  const first = view.runSheet[0] ?? view.activities[0]?.id;
+  const [sel, setSel] = useState<Selection>(() => (first ? { type: "activity", id: first } : null));
   const players = useMemo(() => new Map(view.roster.map((p) => [p.id, p])), [view.roster]);
   const teams = useMemo(() => new Map(view.teams.map((t) => [t.id, t])), [view.teams]);
 
   // If the selected activity disappears, fall back to the first one.
   useEffect(() => {
     if ((sel?.type === "activity" || sel?.type === "edit") && !view.activities.some((a) => a.id === sel.id)) {
-      setSel(view.activities[0] ? { type: "activity", id: view.activities[0].id } : null);
+      setSel(first ? { type: "activity", id: first } : null);
     }
-  }, [sel, view.activities]);
+  }, [sel, view.activities, first]);
 
   /** Awards points and offers a 10-second undo. */
   const scored = async (action: string, payload: Record<string, unknown>, label: string) => {
@@ -79,56 +81,24 @@ export function ScoringPanel({ view, run, notify, serverNow }: Props) {
 
       <div className="scoring__grid">
         <aside className="scoring__side">
-          <nav className="activity-list" aria-label="Activities">
-            {view.activities.map((a) => {
-              const pts = view.ledger.filter((e) => e.activityId === a.id && !e.voided).length;
-              const isOn = view.stage.activityId === a.id && (view.stage.screen === "activity" || view.stage.screen === "results");
-              return (
-                <button
-                  key={a.id}
-                  className={`activity-list__item${sel?.type === "activity" && sel.id === a.id ? " is-selected" : ""}`}
-                  aria-current={sel?.type === "activity" && sel.id === a.id ? "true" : undefined}
-                  onClick={() => setSel({ type: "activity", id: a.id })}
-                >
-                  <span className="activity-list__name">{a.name}</span>
-                  <span className="activity-list__meta">
-                    {a.format === "poll"
-                      ? `${a.pollKind === "whowrote" ? "Who wrote this?" : "Poll"} · ${a.questionCount} ${a.questionCount === 1 ? "question" : "questions"}`
-                      : a.format === "quiz"
-                      ? `Quiz · ${a.questionCount} ${a.questionCount === 1 ? "question" : "questions"} · ${a.kind === "team" ? "team answers" : "individual answers"}`
-                      : `${a.kind === "team" ? "Team" : "Individual"} · ${schemeSummary(a)}`}
-                    {pts > 0 && ` · ${pts} scored`}
-                    {(isOn || (a.format === "quiz" && view.stage.screen === "quiz" && view.quiz?.activityId === a.id) || (a.format === "poll" && view.stage.screen === "poll" && view.poll?.activityId === a.id)) && <span className="tag tag--on">on TV</span>}
-                    {a.resultsShown && !isOn && <span className="tag">results shown</span>}
-                  </span>
-                </button>
-              );
-            })}
-            {view.activities.length === 0 && (
-              <p className="host__muted">Plan the day's games here. You can add them now and score them on the day.</p>
-            )}
-          </nav>
-          <div className="scoring__side-actions">
-            <button className={`btn btn--secondary${sel?.type === "new" ? " is-active" : ""}`} onClick={() => setSel({ type: "new" })}>
-              New activity
-            </button>
-            {ready && (
+          <RunSheet view={view} selectedId={sel?.type === "activity" || sel?.type === "edit" ? sel.id : null} onSelect={(id) => setSel({ type: "activity", id })} />
+          {ready && (
+            <div className="scoring__side-actions">
               <button className={`btn btn--secondary${sel?.type === "adjust" ? " is-active" : ""}`} onClick={() => setSel({ type: "adjust" })}>
                 Bonus or penalty
               </button>
-            )}
-          </div>
+            </div>
+          )}
           {ready && <TotalsTable view={view} />}
         </aside>
 
         <div className="scoring__main">
-          {sel?.type === "new" && (
-            <ActivityForm
-              run={run}
-              onDone={(id) => setSel(id ? { type: "activity", id } : view.activities[0] ? { type: "activity", id: view.activities[0].id } : null)}
-            />
-          )}
-          {editing && <ActivityForm run={run} activity={editing} onDone={() => setSel({ type: "activity", id: editing.id })} />}
+          {editing &&
+            (view.runSheet.includes(editing.id) ? (
+              <SlotForm run={run} activity={editing} onDone={() => setSel({ type: "activity", id: editing.id })} />
+            ) : (
+              <ActivityForm run={run} activity={editing} onDone={() => setSel({ type: "activity", id: editing.id })} />
+            ))}
           {selected && (
             <ActivityPad
               activity={selected}
@@ -141,7 +111,7 @@ export function ScoringPanel({ view, run, notify, serverNow }: Props) {
             />
           )}
           {sel?.type === "adjust" && <AdjustForm view={view} players={players} scored={scored} />}
-          {!sel && <p className="host__muted scoring__empty">Choose an activity, or add a new one.</p>}
+          {!sel && <p className="host__muted scoring__empty">Choose a round from the running order.</p>}
           {(selected || sel?.type === "adjust") && (
             <History
               entries={view.ledger.filter((e) => (selected ? e.activityId === selected.id : e.activityId === null))}
@@ -154,6 +124,129 @@ export function ScoringPanel({ view, run, notify, serverNow }: Props) {
         </div>
       </div>
     </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The running order
+
+function onTvNow(view: HostView, a: ActivityView): boolean {
+  if (view.stage.activityId !== a.id) return false;
+  return ["activity", "results", "quiz", "poll", "house"].includes(view.stage.screen);
+}
+
+function slotMeta(view: HostView, a: ActivityView): string {
+  if (a.format === "quiz") {
+    const n = a.questionCount;
+    return `Quiz round · ${n} of ${ROUND_QUESTIONS} questions`;
+  }
+  if (a.house) {
+    const locked = view.house[a.id]?.houseScore !== null && view.house[a.id]?.houseScore !== undefined;
+    return `Beat the House · ${a.house.settled ? "settled" : locked ? "House's score locked" : "House's score not set"}`;
+  }
+  return a.format === "poll" ? "Poll" : `${a.kind === "team" ? "Team" : "Individual"} · ${schemeSummary(a)}`;
+}
+
+function RunSheet({ view, selectedId, onSelect }: { view: HostView; selectedId: string | null; onSelect: (id: string) => void }) {
+  const slots = view.runSheet.map((id) => view.activities.find((a) => a.id === id)).filter((a): a is ActivityView => !!a);
+  const extras = view.activities.filter((a) => !view.runSheet.includes(a.id));
+  const item = (a: ActivityView, step: number | null) => {
+    const pts = view.ledger.filter((e) => e.activityId === a.id && !e.voided && e.teamId !== HOUSE_ID).length;
+    const selected = selectedId === a.id;
+    const short = a.format === "quiz" && a.questionCount < ROUND_QUESTIONS;
+    return (
+      <button
+        key={a.id}
+        className={`activity-list__item${selected ? " is-selected" : ""}${a.house ? " activity-list__item--house" : ""}`}
+        aria-current={selected ? "true" : undefined}
+        onClick={() => onSelect(a.id)}
+      >
+        {step !== null && <span className="activity-list__step">{step}</span>}
+        <span className="activity-list__name">
+          {a.house ? "🏠 " : ""}
+          {a.name}
+        </span>
+        <span className="activity-list__meta">
+          <span className={short ? "activity-list__todo" : undefined}>{slotMeta(view, a)}</span>
+          {pts > 0 && ` · ${pts} scored`}
+          {onTvNow(view, a) && <span className="tag tag--on">on TV</span>}
+          {a.resultsShown && !onTvNow(view, a) && <span className="tag">results shown</span>}
+        </span>
+      </button>
+    );
+  };
+  return (
+    <nav className="activity-list run-sheet" aria-label="Running order">
+      <p className="run-sheet__title">Running order</p>
+      {slots.map((a, i) => item(a, i + 1))}
+      {extras.length > 0 && (
+        <details className="run-sheet__extras">
+          <summary>Other activities ({extras.length})</summary>
+          {extras.map((a) => item(a, null))}
+        </details>
+      )}
+    </nav>
+  );
+}
+
+/** Edits a run sheet slot: its name, and for quiz rounds the points and time per question. */
+function SlotForm({ run, activity: a, onDone }: { run: Run; activity: ActivityView; onDone: () => void }) {
+  const [name, setName] = useState(a.name);
+  const [perCorrect, setPerCorrect] = useState(String(a.perCorrect));
+  const [questionSeconds, setQuestionSeconds] = useState(String(a.questionSeconds));
+  const [description, setDescription] = useState(a.description);
+  const quiz = a.format === "quiz";
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    const ok = await run(
+      "activity.update",
+      {
+        id: a.id,
+        name,
+        format: a.format,
+        kind: a.kind,
+        scoring: a.scoring,
+        placements: a.placements,
+        perCorrect: Number(perCorrect) || 1,
+        questionSeconds: Math.max(0, Number(questionSeconds) || 0),
+        description,
+        timerSeconds: a.timerSeconds,
+      },
+      "Saved",
+    );
+    if (ok !== undefined) onDone();
+  };
+  return (
+    <form className="pad activity-form" onSubmit={submit}>
+      <h3 className="pad__title">Edit {a.name}</h3>
+      <label className="field">
+        <span className="field__label">{quiz ? "Name of the round" : "Name of the game (e.g. Frisbee, Charades)"}</span>
+        <input className="input" value={name} maxLength={ACTIVITY_NAME_MAX} onChange={(e) => setName(e.target.value)} required autoFocus />
+      </label>
+      {quiz ? (
+        <div className="qform__row">
+          <label className="field field--inline">
+            <span className="field__label">Points per right answer (each question can override it)</span>
+            <input className="input input--small input--num" type="number" min={1} value={perCorrect} onChange={(e) => setPerCorrect(e.target.value)} />
+          </label>
+          <label className="field field--inline">
+            <span className="field__label">Seconds per question (0 for no timer)</span>
+            <input className="input input--small input--num" type="number" min={0} value={questionSeconds} onChange={(e) => setQuestionSeconds(e.target.value)} />
+          </label>
+        </div>
+      ) : (
+        <label className="field">
+          <span className="field__label">How it works (shown on the TV)</span>
+          <textarea className="input input--area" rows={3} maxLength={1000} value={description} onChange={(e) => setDescription(e.target.value)} />
+        </label>
+      )}
+      <div className="activity-form__actions">
+        <button type="button" className="btn btn--ghost" onClick={onDone}>
+          Cancel
+        </button>
+        <button className="btn btn--primary">Save</button>
+      </div>
+    </form>
   );
 }
 
@@ -266,7 +359,7 @@ function TotalsTable({ view }: { view: HostView }) {
         {(view.standings?.house || view.liveHouseTotal !== 0 || view.activities.some((a) => a.house)) && (
           <tr className="totals__house">
             <th scope="row" className="totals__team">
-              🏠 The House <span className="host__muted">(can't win)</span>
+              🏠 The House
             </th>
             <td className="num">{view.standings?.house?.points ?? "–"}</td>
             <td className={`num${(view.standings?.house?.points ?? 0) !== view.liveHouseTotal ? " totals__changed" : ""}`}>{view.liveHouseTotal}</td>
@@ -292,6 +385,7 @@ interface PadProps {
 
 function ActivityPad(props: PadProps) {
   const { activity: a, view, run, players, serverNow, onEdit } = props;
+  const slot = view.runSheet.includes(a.id);
   if (a.format === "quiz" || a.format === "poll") {
     const hasPoints = view.ledger.some((e) => e.activityId === a.id && !e.voided);
     return (
@@ -299,13 +393,16 @@ function ActivityPad(props: PadProps) {
         <header className="pad__head">
           <div>
             <h3 className="pad__title">{a.name}</h3>
-            <p className="host__muted pad__summary">{a.format === "poll" ? pollSummary(a) : quizSummary(a)}</p>
+            <p className="host__muted pad__summary">
+              {a.format === "poll" ? pollSummary(a) : quizSummary(a)}
+              {slot && a.format === "quiz" ? " · The House scores the same as the lowest team" : ""}
+            </p>
           </div>
           <div className="pad__tools">
             <button className="btn btn--small btn--ghost" onClick={onEdit}>
               Edit
             </button>
-            {!hasPoints && (
+            {!hasPoints && !slot && (
               <button
                 className="btn btn--small btn--ghost"
                 onClick={() => {
@@ -323,7 +420,7 @@ function ActivityPad(props: PadProps) {
           </div>
         </header>
         <ActivityVideoPicker activity={a} view={view} run={run} />
-        <HousePad activity={a} view={view} run={run} />
+        {!slot && <HousePad activity={a} view={view} run={run} />}
         {a.format === "poll" ? (
           <PollPad activity={a} view={view} run={run} players={players} serverNow={serverNow} />
         ) : (
@@ -337,6 +434,8 @@ function ActivityPad(props: PadProps) {
 
 function LiveActivityPad({ activity: a, view, run, scored, players, serverNow, onEdit }: PadProps) {
   const ready = view.draw.phase === "complete";
+  // Beat the House slots score through the face-off, not by hand.
+  const houseSlot = view.runSheet.includes(a.id) && !!a.house;
   const entries = view.ledger.filter((e) => e.activityId === a.id && !e.voided);
   const onTv = view.stage.activityId === a.id && view.stage.screen === "activity";
   const hasPoints = entries.length > 0;
@@ -347,7 +446,9 @@ function LiveActivityPad({ activity: a, view, run, scored, players, serverNow, o
         <div>
           <h3 className="pad__title">{a.name}</h3>
           <p className="host__muted pad__summary">
-            {a.kind === "team" ? "Teams play together" : "Everyone plays for their team"} · {schemeSummary(a)}
+            {houseSlot
+              ? "Beat the House: lock in the House's score before you play, enter each team's score, then face off on the TV"
+              : `${a.kind === "team" ? "Teams play together" : "Everyone plays for their team"} · ${schemeSummary(a)}`}
             {a.timerSeconds ? ` · ${formatClock(a.timerSeconds * 1000)} timer` : ""}
           </p>
         </div>
@@ -355,7 +456,7 @@ function LiveActivityPad({ activity: a, view, run, scored, players, serverNow, o
           <button className="btn btn--small btn--ghost" onClick={onEdit}>
             Edit
           </button>
-          {!hasPoints && (
+          {!hasPoints && !houseSlot && (
             <button
               className="btn btn--small btn--ghost"
               onClick={() => {
@@ -368,7 +469,7 @@ function LiveActivityPad({ activity: a, view, run, scored, players, serverNow, o
         </div>
       </header>
       <ActivityVideoPicker activity={a} view={view} run={run} />
-      <HousePad activity={a} view={view} run={run} />
+      <HousePad activity={a} view={view} run={run} fixed={houseSlot} />
 
       <div className="pad__tv">
         <button className={`btn btn--small ${onTv ? "btn--on" : "btn--secondary"}`} onClick={() => run("stage.show", { screen: "activity", activityId: a.id })}>
@@ -385,7 +486,7 @@ function LiveActivityPad({ activity: a, view, run, scored, players, serverNow, o
         </button>
       </div>
 
-      {!ready ? (
+      {houseSlot ? null : !ready ? (
         <p className="callout">You can award points once the teams are drawn.</p>
       ) : (
         <div className="pad__teams">

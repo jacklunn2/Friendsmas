@@ -13,15 +13,20 @@ import {
   QUESTION_MAX,
   answerText,
   formatNumber,
+  teamDisplayName,
+  VOTE_TYPES,
   type HostQuizAnswer,
+  type PollOptionsKind,
+  type PollOptionView,
   type QuestionType,
   type QuestionView,
   type QuizResult,
   type QuizView,
 } from "../shared/types";
 import { findPlayer, findTeam, int, requireComplete, UserError, type Actor, type Handler, type Payload } from "./common";
+import { allFacts } from "./guests";
 import { shuffle } from "./random";
-import { startActivityVideo } from "./show";
+import { playClip, startActivityVideo } from "./show";
 import { newId, type Activity, type Question, type QuizAnswer, type ServerState } from "./state";
 
 const MAX_QUESTIONS = 100;
@@ -65,6 +70,55 @@ export function secondsFor(quiz: Activity, q: Question): number {
 }
 
 // ---------------------------------------------------------------------------
+// Polls and "Who wrote this?" inside a round
+
+/** Guests who can be picked or can play: on a team and not waiting for approval. */
+function guestsInPlay(s: ServerState) {
+  return s.players
+    .filter((p) => p.teamId && p.status !== "pending" && s.teams.some((t) => t.id === p.teamId))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function factFor(s: ServerState, q: Question) {
+  return q.type === "whowrote" && q.factId ? (allFacts(s).find((f) => f.id === q.factId) ?? null) : null;
+}
+
+/** What teams pick between on a poll or "Who wrote this?" question. */
+export function choicesFor(s: ServerState, q: Question): PollOptionView[] {
+  if (q.type === "whowrote") return guestsInPlay(s).map((p) => ({ key: p.id, label: p.name }));
+  if (q.type !== "poll") return [];
+  const kind = q.optionsKind ?? "custom";
+  if (kind === "teams") return s.teams.map((t) => ({ key: t.id, label: teamDisplayName(t) }));
+  if (kind === "players") return guestsInPlay(s).map((p) => ({ key: p.id, label: p.name }));
+  return q.options.map((label, i) => ({ key: String(i), label }));
+}
+
+/** What marking needs to know about all the answers at once. */
+export interface MarkContext {
+  closest: number | null;
+  /** Polls: the most popular choice(s). */
+  winners: string[];
+  counts: Record<string, number>;
+  /** "Who wrote this?": the writer and their team (which can't score on its own fact). */
+  writerId: string | null;
+  writerTeamId: string | null;
+}
+
+function markContext(s: ServerState, q: Question, answers: Record<string, QuizAnswer>): MarkContext {
+  const counts: Record<string, number> = {};
+  if (VOTE_TYPES.includes(q.type)) for (const a of Object.values(answers)) counts[a.value] = (counts[a.value] ?? 0) + 1;
+  const top = Math.max(0, ...Object.values(counts));
+  const writer = factFor(s, q);
+  return {
+    closest: closestDistance(q, answers),
+    winners: q.type === "poll" && top > 0 ? Object.keys(counts).filter((k) => counts[k] === top) : [],
+    counts,
+    writerId: writer?.playerId ?? null,
+    writerTeamId: writer ? (s.players.find((p) => p.id === writer.playerId)?.teamId ?? null) : null,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Marking
 
 /** Lower case, no punctuation or accents, no leading "the/a/an". */
@@ -94,8 +148,18 @@ function distance(a: string, b: string): number {
 }
 
 /** Automatic marking of one answer, before any host decision. */
-export function autoMark(q: Question, value: string, closestDistance: number | null): "correct" | "close" | "wrong" {
+export function autoMark(
+  q: Question,
+  value: string,
+  closestDistance: number | null,
+  votes?: { ctx: MarkContext; answererTeamId: string | null },
+): "correct" | "close" | "wrong" {
   if (q.type === "choice" || q.type === "truefalse") return Number(value) === q.correctIndex ? "correct" : "wrong";
+  if (q.type === "poll") return votes?.ctx.winners.includes(value) ? "correct" : "wrong";
+  if (q.type === "whowrote") {
+    if (!votes?.ctx.writerId || votes.answererTeamId === votes.ctx.writerTeamId) return "wrong";
+    return value === votes.ctx.writerId ? "correct" : "wrong";
+  }
   if (q.type === "number") {
     if (q.numberAnswer === null || closestDistance === null) return "wrong";
     return Math.abs(Number(value) - q.numberAnswer) === closestDistance ? "correct" : "wrong";
@@ -124,11 +188,12 @@ function closestDistance(q: Question, answers: Record<string, QuizAnswer>): numb
 /** Every answer to a question with its marking, oldest first. */
 export function markAnswers(s: ServerState, quiz: Activity, q: Question): HostQuizAnswer[] {
   const answers = answersFor(s, quiz.id, q.id);
-  const closest = closestDistance(q, answers);
+  const ctx = markContext(s, q, answers);
   const overrides = s.quiz.overrides[q.id] ?? {};
+  const teamOf = (answererId: string) => (quiz.kind === "team" ? answererId : (s.players.find((p) => p.id === answererId)?.teamId ?? null));
   return Object.entries(answers)
     .map(([answererId, a]) => {
-      const auto = autoMark(q, a.value, closest);
+      const auto = autoMark(q, a.value, ctx.closest, { ctx, answererTeamId: teamOf(answererId) });
       const override = answererId in overrides ? overrides[answererId] : null;
       return {
         answererId,
@@ -154,7 +219,7 @@ function grade(s: ServerState, quiz: Activity, q: Question, now: number): void {
   const marked = markAnswers(s, quiz, q).filter((m) => m.correct);
   const number = quiz.questions!.indexOf(q) + 1;
   const pts = pointsFor(quiz, q);
-  const fastest = quiz.speedBonus && q.type !== "number" ? marked[0] : undefined;
+  const fastest = quiz.speedBonus && !["number", "poll", "whowrote"].includes(q.type) ? marked[0] : undefined;
   for (const m of marked) {
     const target = recipient(s, quiz, m.answererId);
     if (!target) continue;
@@ -174,7 +239,8 @@ function grade(s: ServerState, quiz: Activity, q: Question, now: number): void {
         voidedAt: null,
         revealed: false,
       });
-    push(pts, q.type === "number" ? `Q${number}: closest` : `Q${number}: correct`);
+    const why = q.type === "number" ? "closest" : q.type === "poll" ? "voted with the majority" : q.type === "whowrote" ? "guessed the writer" : "correct";
+    push(pts, `Q${number}: ${why}`);
     if (fastest === m) push(quiz.speedBonus!, `Q${number}: fastest correct answer`);
   }
 }
@@ -206,16 +272,30 @@ function parseNumber(v: unknown): number | null {
   return Number(t);
 }
 
-/** Validates a question from the editor or an import. */
-export function questionFields(p: Payload): Omit<Question, "id" | "imageId"> {
+/** Validates a question from the editor or an import. Pass the state to check facts and videos exist. */
+export function questionFields(p: Payload, s?: ServerState): Omit<Question, "id" | "imageId"> {
   const type = p.type as QuestionType;
-  if (!["choice", "truefalse", "number", "text"].includes(type)) throw new UserError("Choose a question type.");
-  const prompt = cleanLine(p.prompt, QUESTION_MAX, "The question", true);
+  if (!["choice", "truefalse", "number", "text", "poll", "whowrote"].includes(type)) throw new UserError("Choose a question type.");
+  // "Who wrote this?" shows the fact itself, so the question line is optional.
+  const prompt = cleanLine(p.prompt, QUESTION_MAX, "The question", type !== "whowrote") || (type === "whowrote" ? "Who wrote this?" : "");
   let options: string[] = [];
   let correctIndex = 0;
   let numberAnswer: number | null = null;
   let accepted: string[] = [];
-  if (type === "choice") {
+  let optionsKind: PollOptionsKind = "custom";
+  let factId: string | null = null;
+  if (type === "poll") {
+    optionsKind = p.optionsKind as PollOptionsKind;
+    if (!["players", "teams", "custom"].includes(optionsKind)) throw new UserError("Choose what teams vote for.");
+    if (optionsKind === "custom") {
+      options = (Array.isArray(p.options) ? p.options : []).map((o, i) => cleanLine(o, OPTION_MAX, `Option ${i + 1}`)).filter(Boolean);
+      if (options.length < 2) throw new UserError("Give at least two options.");
+      if (options.length > MAX_OPTIONS) throw new UserError(`Give at most ${MAX_OPTIONS} options.`);
+    }
+  } else if (type === "whowrote") {
+    if (typeof p.factId !== "string" || (s && !allFacts(s).some((f) => f.id === p.factId))) throw new UserError("Choose one of the guests' secret facts.");
+    factId = p.factId;
+  } else if (type === "choice") {
     options = (Array.isArray(p.options) ? p.options : []).map((o, i) => cleanLine(o, OPTION_MAX, `Option ${i + 1}`)).filter(Boolean);
     if (options.length < 2) throw new UserError("Give at least two options.");
     if (options.length > MAX_OPTIONS) throw new UserError(`Give at most ${MAX_OPTIONS} options.`);
@@ -234,7 +314,12 @@ export function questionFields(p: Payload): Omit<Question, "id" | "imageId"> {
   const seconds = p.seconds === null || p.seconds === undefined || p.seconds === "" ? null : int(p, "seconds", { min: 0, max: MAX_SECONDS, label: "the time limit" });
   const notes = cleanLine(p.notes, NOTES_MAX, "Host notes");
   const fact = cleanLine(p.fact, NOTES_MAX, "The fun fact");
-  return { type, prompt, options, correctIndex, numberAnswer, accepted, points, seconds, notes, fact };
+  let videoId: string | null = null;
+  if (p.videoId !== null && p.videoId !== undefined && p.videoId !== "") {
+    if (typeof p.videoId !== "string" || (s && !s.videos.some((v) => v.id === p.videoId))) throw new UserError("That video no longer exists.");
+    videoId = p.videoId;
+  }
+  return { type, prompt, options, correctIndex, numberAnswer, accepted, points, seconds, notes, fact, videoId, optionsKind, factId };
 }
 
 /**
@@ -258,7 +343,8 @@ export function parseImport(raw: string): { questions: Omit<Question, "id" | "im
       choice: "choice", multiplechoice: "choice", mc: "choice",
       truefalse: "truefalse", tf: "truefalse", trueorfalse: "truefalse",
       number: "number", closestnumber: "number", closest: "number", numeric: "number",
-      text: "text", typed: "text", typedanswer: "text", word: "text",
+      text: "text", typed: "text", typedanswer: "text", word: "text", exact: "text", exactanswer: "text",
+      poll: "poll", vote: "poll",
     };
     let qType: QuestionType | undefined = map[type];
     if (!type) {
@@ -268,12 +354,15 @@ export function parseImport(raw: string): { questions: Omit<Question, "id" | "im
       else qType = "text";
     }
     if (!qType) {
-      errors.push(`Row ${line}: "${typeRaw}" isn't a question type. Use choice, truefalse, number or text.`);
+      errors.push(`Row ${line}: "${typeRaw}" isn't a question type. Use choice, truefalse, number, text or poll.`);
       return;
     }
     try {
       const payload: Payload = { type: qType, prompt, notes, fact };
-      if (qType === "choice") {
+      if (qType === "poll") {
+        payload.optionsKind = "custom";
+        payload.options = [answer, ...wrongs];
+      } else if (qType === "choice") {
         const options = shuffle([answer, ...wrongs]);
         payload.options = options;
         payload.correctIndex = options.indexOf(answer);
@@ -338,6 +427,8 @@ function questionUsed(s: ServerState, quizId: string, qid: string): boolean {
 function openQuestion(s: ServerState, quiz: Activity & { questions: Question[] }, index: number, now: number): void {
   const q = quiz.questions[index];
   if (!q) throw new UserError("That question doesn't exist.");
+  if (q.type === "whowrote" && !factFor(s, q)) throw new UserError("That secret fact has been removed. Choose another for this question.");
+  if (q.type === "poll" && choicesFor(s, q).length < 2) throw new UserError("There aren't enough choices for this poll yet.");
   // Replaying a question starts it from scratch.
   if (questionUsed(s, quiz.id, q.id)) {
     if (s.quiz.answers[quiz.id]) delete s.quiz.answers[quiz.id][q.id];
@@ -354,7 +445,11 @@ function openQuestion(s: ServerState, quiz: Activity & { questions: Question[] }
   s.quiz.index = index;
   s.quiz.phase = "open";
   s.quiz.openedAt = now;
-  s.quiz.endsAt = secs > 0 ? now + secs * 1000 : null;
+  // A question's clip plays first; the clock allows for it.
+  if (s.video?.activityId === quiz.id) s.video = null;
+  const clip = q.videoId ? s.videos.find((v) => v.id === q.videoId) : undefined;
+  if (clip) playClip(s, clip.id, quiz.id, now);
+  s.quiz.endsAt = secs > 0 ? now + (clip?.durationMs ?? 0) + secs * 1000 : null;
 }
 
 function closeQuestion(s: ServerState): void {
@@ -374,7 +469,7 @@ export function quizAlarm(s: ServerState, now: number): boolean {
 export const quizHost: Record<string, Handler> = {
   "quiz.question.save": (s, _a, p, now) => {
     const quiz = findQuiz(s, p.activityId);
-    const fields = questionFields((p.question ?? {}) as Payload);
+    const fields = questionFields((p.question ?? {}) as Payload, s);
     const imageId = typeof (p.question as Payload)?.imageId === "string" ? ((p.question as Payload).imageId as string) : null;
     if (p.questionId) {
       const q = quiz.questions.find((x) => x.id === p.questionId);
@@ -493,6 +588,7 @@ export const quizHost: Record<string, Handler> = {
     if (s.quiz.phase !== "closed") throw new UserError("That answer is already revealed.");
     s.quiz.phase = "revealed";
     if (!s.quiz.revealed.includes(q.id)) s.quiz.revealed.push(q.id);
+    if (q.videoId && s.video?.videoId === q.videoId) s.video = null;
     grade(s, quiz, q, now);
     return { audit: ["quiz.reveal", `${quiz.name}: Q${s.quiz.index + 1} answer revealed`] };
   },
@@ -522,7 +618,11 @@ export const quizPlayer: Record<string, Handler> = {
     if (!me.teamId) throw new UserError("You're not on a team yet.");
     findTeam(s, me.teamId);
     let value: string;
-    if (q.type === "choice" || q.type === "truefalse") {
+    if (q.type === "poll" || q.type === "whowrote") {
+      if (typeof p.value !== "string" || !choicesFor(s, q).some((c) => c.key === p.value)) throw new UserError("Choose one of the options.");
+      if (q.type === "poll" && q.optionsKind === "teams" && p.value === me.teamId) throw new UserError("You can't vote for your own team.");
+      value = p.value;
+    } else if (q.type === "choice" || q.type === "truefalse") {
       value = String(int(p, "value", { min: 0, max: q.options.length - 1, label: "your answer" }));
     } else if (q.type === "number") {
       const n = parseNumber(p.value);
@@ -552,18 +652,37 @@ export function quizView(s: ServerState, revealAnswers: boolean): QuizView | nul
   const live = s.quiz.phase !== "intro" && q;
   const answers = live ? answersFor(s, quiz.id, q.id) : {};
   const revealed = live && s.quiz.phase === "revealed" && revealAnswers;
+  const voting = live && VOTE_TYPES.includes(q.type);
+  const choices = voting ? choicesFor(s, q) : null;
+  const label = (key: string) => choices?.find((c) => c.key === key)?.label ?? "";
   let reveal: QuizView["reveal"] = null;
   if (revealed) {
     const marked = markAnswers(s, quiz, q);
-    const fastest = quiz.speedBonus && q.type !== "number" ? marked.find((m) => m.correct) : undefined;
+    const ctx = markContext(s, q, answers);
+    const fastest = quiz.speedBonus && !["number", "poll", "whowrote"].includes(q.type) ? marked.find((m) => m.correct) : undefined;
     const results: QuizResult[] = marked.map((m) => ({
       answererId: m.answererId,
       correct: m.correct,
-      value: q.type === "number" ? formatNumber(Number(m.value)) : q.type === "text" ? m.value : null,
+      value: q.type === "number" ? formatNumber(Number(m.value)) : q.type === "text" ? m.value : voting ? label(m.value) : null,
       points: m.correct ? pointsFor(quiz, q) + (fastest === m ? quiz.speedBonus! : 0) : 0,
       fastest: fastest === m,
     }));
-    reveal = { answer: answerText(q), correctIndex: q.type === "choice" || q.type === "truefalse" ? q.correctIndex : null, results };
+    const answer =
+      q.type === "poll"
+        ? ctx.winners.length
+          ? ctx.winners.map(label).join(" & ")
+          : "No votes"
+        : q.type === "whowrote"
+          ? (s.players.find((p) => p.id === ctx.writerId)?.name ?? "A guest")
+          : answerText(q);
+    reveal = {
+      answer,
+      correctIndex: q.type === "choice" || q.type === "truefalse" ? q.correctIndex : null,
+      results,
+      counts: voting ? ctx.counts : null,
+      winners: ctx.winners,
+      writerId: q.type === "whowrote" ? ctx.writerId : null,
+    };
   }
   return {
     activityId: quiz.id,
@@ -573,7 +692,17 @@ export function quizView(s: ServerState, revealAnswers: boolean): QuizView | nul
     total: questions.length,
     endsAt: s.quiz.phase === "open" ? s.quiz.endsAt : null,
     question: live
-      ? { id: q.id, number: s.quiz.index + 1, type: q.type, prompt: q.prompt, options: q.options, imageId: q.imageId, points: pointsFor(quiz, q) }
+      ? {
+          id: q.id,
+          number: s.quiz.index + 1,
+          type: q.type,
+          prompt: q.type === "whowrote" ? (factFor(s, q)?.text ?? "") : q.prompt,
+          options: q.options,
+          choices,
+          optionsKind: q.type === "poll" ? (q.optionsKind ?? "custom") : q.type === "whowrote" ? "players" : null,
+          imageId: q.imageId,
+          points: pointsFor(quiz, q),
+        }
       : null,
     answeredIds: Object.keys(answers),
     reveal,
@@ -581,7 +710,15 @@ export function quizView(s: ServerState, revealAnswers: boolean): QuizView | nul
 }
 
 export function questionView(q: Question): QuestionView {
-  return { ...q };
+  return { ...q, options: q.options.slice(), accepted: q.accepted.slice(), videoId: q.videoId ?? null, optionsKind: q.optionsKind ?? "custom", factId: q.factId ?? null };
+}
+
+/** Whether this guest wrote the fact in the "Who wrote this?" question that's open. */
+export function isMyFactInQuiz(s: ServerState, playerId: string | null): boolean {
+  if (!playerId || s.stage.screen !== "quiz" || !s.quiz.activityId || s.quiz.phase === "intro") return false;
+  const quiz = s.activities.find((a) => a.id === s.quiz.activityId);
+  const q = quiz?.questions?.[s.quiz.index];
+  return !!(q && factFor(s, q)?.playerId === playerId);
 }
 
 /** The answer a guest's phone should show for the open question. */

@@ -64,12 +64,9 @@ export class EventRoom extends DurableObject<Env> {
         "CREATE TABLE IF NOT EXISTS tv_pairings (id TEXT PRIMARY KEY, code TEXT NOT NULL, created_at INTEGER NOT NULL, event_code TEXT)",
       );
       const stored = await ctx.storage.get<ServerState>("state");
-      if (stored) {
-        this.state = migrate(stored);
-      } else {
-        this.state = freshState(Date.now());
-        await ctx.storage.put("state", this.state);
-      }
+      // Migrating can add things (like the running order), so save straight away.
+      this.state = migrate(stored ?? freshState(Date.now()));
+      await ctx.storage.put("state", this.state);
     });
   }
 

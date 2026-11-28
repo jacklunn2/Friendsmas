@@ -7,7 +7,8 @@ import { teamDisplayName, type ActivityView, type HostView, type HouseDirection 
 import { teamStyle } from "../ui";
 import type { Run } from "./Scoring";
 
-export function HousePad({ activity: a, view, run }: { activity: ActivityView; view: HostView; run: Run }) {
+/** `fixed`: a Beat the House round in the running order, which can't be turned off. */
+export function HousePad({ activity: a, view, run, fixed = false }: { activity: ActivityView; view: HostView; run: Run; fixed?: boolean }) {
   const h = a.house;
   const secret = view.house[a.id];
   const [open, setOpen] = useState(false);
@@ -41,7 +42,7 @@ export function HousePad({ activity: a, view, run }: { activity: ActivityView; v
     <div className="house-pad">
       <div className="row">
         <h4 className="callout__title">🏠 Beat the House</h4>
-        {h ? (
+        {fixed ? null : h ? (
           <button className="btn btn--small btn--ghost" disabled={h.settled} onClick={() => confirm("Stop playing this against the House?") && save(false)}>
             Turn off
           </button>

@@ -18,7 +18,9 @@ export type ScoringScheme = "placement" | "perCorrect" | "judged";
 export type EntryKind = "award" | "bonus" | "penalty";
 export type StageScreen = "teams" | "activity" | "quiz" | "results" | "standings" | "final" | "welcome" | "missions" | "poll" | "prize" | "house";
 export type ActivityFormat = "live" | "quiz" | "poll";
-export type QuestionType = "choice" | "truefalse" | "number" | "text";
+export type QuestionType = "choice" | "truefalse" | "number" | "text" | "poll" | "whowrote";
+/** Question types where teams pick from a list worked out at the time (guests, teams or the host's options). */
+export const VOTE_TYPES: QuestionType[] = ["poll", "whowrote"];
 export type QuizPhase = "intro" | "open" | "closed" | "revealed";
 
 export interface PublicPlayer {
@@ -102,6 +104,8 @@ export interface ActivityView {
   videoId: string | null;
   /** Clips linked to the activity, played by the host when they reach that point. */
   clips: string[];
+  /** A quiz round in the running order: the House scores the same as the lowest team. */
+  houseMatchesLowest: boolean;
   /** "Beat the House" settings. The House's score itself is never sent to the TV or phones before the reveal. */
   house: HouseSettingsView | null;
 }
@@ -120,6 +124,12 @@ export interface QuestionView {
   /** Typed answer: every accepted answer. */
   accepted: string[];
   imageId: string | null;
+  /** A clip that plays on the TV when the question opens. */
+  videoId: string | null;
+  /** Poll: what teams vote between. */
+  optionsKind: PollOptionsKind;
+  /** "Who wrote this?": the guest's secret fact it uses. */
+  factId: string | null;
   /** Overrides the quiz's points per correct answer. */
   points: number | null;
   /** Overrides the quiz's seconds per question; 0 = no timer. */
@@ -135,6 +145,9 @@ export interface LiveQuestion {
   type: QuestionType;
   prompt: string;
   options: string[];
+  /** Polls and "Who wrote this?": what teams pick between. */
+  choices: PollOptionView[] | null;
+  optionsKind: PollOptionsKind | null;
   imageId: string | null;
   points: number;
 }
@@ -161,7 +174,17 @@ export interface QuizView {
   /** Who has answered the current question. */
   answeredIds: string[];
   /** Only once the answer is revealed. */
-  reveal: { answer: string; correctIndex: number | null; results: QuizResult[] } | null;
+  reveal: {
+    answer: string;
+    correctIndex: number | null;
+    results: QuizResult[];
+    /** Polls and "Who wrote this?": how many teams picked each choice. */
+    counts: Record<string, number> | null;
+    /** Polls: the most popular choice(s). */
+    winners: string[];
+    /** "Who wrote this?": the writer. */
+    writerId: string | null;
+  } | null;
 }
 
 export interface MyQuizAnswer {
@@ -214,14 +237,16 @@ export interface StandingsView {
   final: boolean;
   /** Best first. */
   rows: StandingsRow[];
-  /** The House's points, shown on the leaderboard but never a winner. Null until The House plays. */
-  house: { points: number; prevPoints: number | null } | null;
+  /** The House's points and place. It wins ties. Null until The House plays. */
+  house: { points: number; prevPoints: number | null; rank: number; prevRank: number | null } | null;
 }
 
 export interface ResultsView {
   activityId: string;
   /** Points each team earned in the activity, best first. Only revealed points. */
   rows: { teamId: string; points: number; rank: number; earners: { playerId: string; points: number }[] }[];
+  /** The House's points in this activity, if it scored. */
+  house: number | null;
 }
 
 export interface PublicView {
@@ -606,8 +631,13 @@ export interface LedgerEntryView {
   revealed: boolean;
 }
 
+/** A quiz round holds this many questions. */
+export const ROUND_QUESTIONS = 10;
+
 export interface HostView extends PublicView {
   role: "host";
+  /** The day's running order: activity ids, quiz rounds and Beat the House rounds alternating. */
+  runSheet: string[];
   roster: HostPlayer[];
   audit: AuditEntry[];
   spinCooldownUntil: number | null;
@@ -747,6 +777,8 @@ export function answerText(q: Pick<QuestionView, "type" | "options" | "correctIn
   if (q.type === "choice") return `${OPTION_LETTERS[q.correctIndex] ?? "?"}: ${q.options[q.correctIndex] ?? ""}`;
   if (q.type === "truefalse") return q.correctIndex === 0 ? "True" : "False";
   if (q.type === "number") return q.numberAnswer === null ? "" : formatNumber(q.numberAnswer);
+  if (q.type === "poll") return "The most popular answer scores";
+  if (q.type === "whowrote") return "Whoever wrote it";
   return q.accepted[0] ?? "";
 }
 
@@ -757,6 +789,8 @@ export function formatNumber(n: number): string {
 export const QUESTION_TYPE_LABEL: Record<QuestionType, string> = {
   choice: "Multiple choice",
   truefalse: "True or false",
-  number: "Closest number",
-  text: "Typed answer",
+  number: "Closest to",
+  text: "Exact answer",
+  poll: "Poll",
+  whowrote: "Who wrote this?",
 };

@@ -14,12 +14,13 @@ import type {
   PublicView,
   StageView,
 } from "../shared/types";
+import { HOUSE_ID } from "../shared/types";
 import { revealedIds, spinCooldownUntil } from "./logic";
 import { foodWarnings, menuView, questionnaireView } from "./guests";
 import { hostMissionsView, missionsRevealView, myMissionView } from "./missions";
 import { hostPollVotes, isMyFact, myPollVote, pollQuestionView, pollView } from "./polls";
 import { hostHouseView, houseRevealView } from "./house";
-import { hostQuizAnswers, myQuizAnswer, questionView, quizView } from "./quiz";
+import { hostQuizAnswers, isMyFactInQuiz, myQuizAnswer, questionView, quizView } from "./quiz";
 import { houseTotal, liveEntries, rank, standingsStale, standingsView, totalsFrom } from "./scoring";
 import type { Activity, ServerPlayer, ServerState } from "./state";
 
@@ -95,7 +96,7 @@ function base(s: ServerState, viewer: Viewer, now: number): PublicView {
     // Guests and the TV only learn about an activity once it's on the TV.
     activities: s.activities
       .filter((a) => viewer.role === "host" || a.id === s.stage.activityId || a.resultsShown)
-      .map(activityView),
+      .map((a) => activityView(a, s)),
     stage: {
       screen: s.stage.screen,
       activityId: s.stage.activityId,
@@ -114,8 +115,9 @@ function base(s: ServerState, viewer: Viewer, now: number): PublicView {
   };
 }
 
-function activityView(a: Activity): ActivityView {
+function activityView(a: Activity, s: ServerState): ActivityView {
   return {
+    houseMatchesLowest: a.format === "quiz" && !!s.runSheet?.includes(a.id),
     id: a.id,
     name: a.name,
     format: a.format ?? "live",
@@ -145,8 +147,10 @@ function resultsView(s: ServerState): ResultsView | null {
   const id = s.stage.activityId;
   const entries = s.ledger.filter((e) => e.activityId === id && !e.voided && e.revealed);
   const { teams, players } = totalsFrom(s, entries);
+  const house = houseTotal(entries);
   return {
     activityId: id,
+    house: entries.some((e) => e.teamId === HOUSE_ID) ? house : null,
     rows: rank(teams, s.teams).map((r) => ({
       teamId: r.teamId,
       points: r.points,
@@ -177,7 +181,7 @@ export function playerView(s: ServerState, playerId: string | null, now: number)
     myQuestionnaire: questionnaireView(raw?.answers),
     myMission: myMissionView(s, raw?.id ?? null),
     myPollVote: myPollVote(s, raw?.id ?? null),
-    myFactOnTv: isMyFact(s, raw?.id ?? null),
+    myFactOnTv: isMyFact(s, raw?.id ?? null) || isMyFactInQuiz(s, raw?.id ?? null),
     myPoints: raw ? (s.snapshots.at(-1)?.players[raw.id] ?? 0) : 0,
     myQuizAnswer: myQuizAnswer(s, raw?.id ?? null),
     myTeam:
@@ -199,6 +203,7 @@ export function hostView(s: ServerState, audit: AuditEntry[], now: number): Host
   return {
     ...view,
     role: "host",
+    runSheet: [...(s.runSheet ?? [])],
     roster: s.players.map((p) => ({
       ...publicPlayer(p, revealed),
       hasDevice: !!p.token,

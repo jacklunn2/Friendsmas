@@ -36,6 +36,49 @@ function points(p: Payload, key: string, label: string, fallback: number): numbe
 }
 
 const tag = (activityId: string) => `house:${activityId}`;
+const roundTag = (activityId: string) => `houseround:${activityId}`;
+
+/**
+ * In each quiz round on the run sheet, the House scores the same as the
+ * lowest team. Kept in step after every change; old entries are voided.
+ * Returns true if anything changed.
+ */
+export function syncHouseRounds(s: ServerState, now: number): boolean {
+  if (!s.runSheet?.length || !s.teams.length) return false;
+  let changed = false;
+  for (const id of s.runSheet) {
+    const a = s.activities.find((x) => x.id === id);
+    if (!a || a.format !== "quiz") continue;
+    const live = s.ledger.filter((e) => !e.voided && e.activityId === a.id);
+    const lowest = Math.min(...s.teams.map((t) => live.filter((e) => e.teamId === t.id).reduce((n, e) => n + e.points, 0)));
+    const target = Math.max(0, lowest);
+    const mine = live.filter((e) => e.teamId === HOUSE_ID && e.questionId === roundTag(a.id));
+    if (mine.length <= 1 && mine.reduce((n, e) => n + e.points, 0) === target) continue;
+    for (const e of mine) {
+      e.voided = true;
+      e.voidedAt = now;
+    }
+    if (target > 0) {
+      s.ledger.push({
+        id: newId(s, "e"),
+        at: now,
+        teamId: HOUSE_ID,
+        playerId: null,
+        activityId: a.id,
+        points: target,
+        reason: "Matches the lowest team in the round",
+        kind: "award",
+        placement: null,
+        questionId: roundTag(a.id),
+        voided: false,
+        voidedAt: null,
+        revealed: false,
+      });
+    }
+    changed = true;
+  }
+  return changed;
+}
 
 /** Each team's score in the round: what the host recorded, or for quizzes and polls, the points they earned. */
 function teamScores(s: ServerState, a: Activity): Record<string, number | null> {
@@ -90,6 +133,7 @@ export const houseHost: Record<string, Handler> = {
   /** Turns Beat the House on or off for an activity, and sets its points. */
   "house.settings": (s, _a, p) => {
     const a = findActivity(s, p.activityId);
+    if (p.enabled !== true && s.runSheet?.includes(a.id)) throw new UserError(`${a.name} is a Beat the House round in the running order, so it always plays against the House.`);
     if (p.enabled !== true) {
       if (a.house && s.ledger.some((e) => !e.voided && e.questionId === tag(a.id))) {
         throw new UserError("The House has already been settled for this activity. Void those points first.");

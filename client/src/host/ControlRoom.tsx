@@ -176,6 +176,11 @@ function NowPanel({ view, run, serverNow }: { view: HostView; run: Run; serverNo
     setBusy(false);
   };
 
+  // The first slot in the running order that hasn't been played yet.
+  const played = (a: (typeof view.activities)[number]) =>
+    a.house ? a.house.settled : a.format === "quiz" && a.questionCount > 0 && (view.revealedQuestions[a.id]?.length ?? 0) >= a.questionCount;
+  const next = view.runSheet.map((id) => view.activities.find((a) => a.id === id)).find((a) => a && !played(a));
+
   let label = "";
   let hint: ReactNode = "";
   let onClick: (() => void) | null = null;
@@ -288,16 +293,26 @@ function NowPanel({ view, run, serverNow }: { view: HostView; run: Run; serverNo
       label = "Show the leaderboard";
       hint = "The leaderboard is up to date.";
       onClick = () => act("stage.show", { screen: "standings" });
+    } else if (next && !view.standings?.final && view.draw.phase === "complete" && view.stage.activityId === next.id) {
+      label = `${next.name} is on the TV`;
+      hint = next.house
+        ? "Enter each team's score under Scoring, then face off against the House."
+        : "Run it under Scoring.";
+    } else if (next && !view.standings?.final && view.draw.phase === "complete") {
+      const slot = next;
+      label = `Start ${slot.name}`;
+      hint = slot.house
+        ? `Next in the running order: ${slot.name}, a Beat the House round. Lock in the House's score first.`
+        : `Next in the running order: ${slot.name}, ${slot.questionCount} ${slot.questionCount === 1 ? "question" : "questions"}.`;
+      onClick = () => (slot.format === "quiz" ? act("quiz.start", { activityId: slot.id }) : act("stage.show", { screen: "activity", activityId: slot.id }));
     } else if (!anyPoints) {
       label = "Waiting for points";
-      hint = view.activities.length
-        ? "Choose an activity under Scoring, show it on the TV, then award points."
-        : "Add your first activity under Scoring, then award points as you play.";
+      hint = "Start the first round from the running order under Scoring.";
     } else {
       label = view.standings?.final ? "Final results are on the TV" : "Leaderboard is up to date";
       hint = view.standings?.final
         ? "Award a tie-breaker and reveal the final results again if you need to."
-        : "Award more points, and the next reveal button appears here.";
+        : "That's the whole running order. Reveal the final results when you're ready.";
     }
   }
 

@@ -566,7 +566,7 @@ describe("the House", () => {
     expect(hostView(s, [], T0).liveHouseTotal).toBe(0);
   });
 
-  it("takes the points when nobody beats it, and sits on the leaderboard without ever winning", () => {
+  it("takes the points when nobody beats it, and can win outright", () => {
     const s = setup(4);
     drawTeams(s);
     const id = houseRound(s, { direction: "low" });
@@ -582,9 +582,28 @@ describe("the House", () => {
     runAction(s, HOST, "score.adjust", { teamId: t1.id, points: 2, reason: "Style" }, T0);
     runAction(s, HOST, "standings.final", {}, T0 + 1);
     const st = stageView(s, T0).standings!;
-    expect(st.house).toEqual({ points: 6, prevPoints: null });
-    expect(st.rows[0]).toMatchObject({ teamId: t1.id, rank: 1, points: 2 });
+    // The House has 6, the best team 2: the House wins and every team drops a place.
+    expect(st.house).toEqual({ points: 6, prevPoints: null, rank: 1, prevRank: null });
+    expect(st.rows[0]).toMatchObject({ teamId: t1.id, rank: 2, points: 2 });
     expect(st.rows.some((r) => r.teamId === "house")).toBe(false);
+  });
+
+  it("wins ties on the leaderboard, and sits below teams that are ahead", () => {
+    const s = setup(4);
+    drawTeams(s);
+    const id = houseRound(s, { direction: "high" });
+    const [t1, t2] = s.teams;
+    runAction(s, HOST, "house.score", { activityId: id, score: 10 }, T0);
+    runAction(s, HOST, "house.teamScore", { activityId: id, teamId: t1.id, score: 3 }, T0);
+    runAction(s, HOST, "house.reveal", { activityId: id }, T0);
+    runAction(s, HOST, "score.adjust", { teamId: t1.id, points: 9, reason: "Style" }, T0);
+    runAction(s, HOST, "score.adjust", { teamId: t2.id, points: 6, reason: "Style" }, T0);
+    runAction(s, HOST, "standings.reveal", {}, T0 + 1);
+    const st = stageView(s, T0).standings!;
+    // t1 has 9, the House 6 (its points), t2 6: the House wins the tie with t2.
+    expect(st.rows.find((r) => r.teamId === t1.id)).toMatchObject({ rank: 1 });
+    expect(st.house).toMatchObject({ points: 6, rank: 2 });
+    expect(st.rows.find((r) => r.teamId === t2.id)).toMatchObject({ rank: 3 });
   });
 
   it("settles quiz rounds on the points each team earned, and re-settling voids the old points", () => {

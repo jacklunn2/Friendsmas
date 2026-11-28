@@ -93,6 +93,12 @@ export interface Question {
   numberAnswer: number | null;
   accepted: string[];
   imageId: string | null;
+  /** A clip that plays on the TV when the question opens. */
+  videoId?: string | null;
+  /** Poll questions: what teams vote between. */
+  optionsKind?: PollOptionsKind;
+  /** "Who wrote this?" questions: the secret fact. */
+  factId?: string | null;
   points: number | null;
   seconds: number | null;
   notes: string;
@@ -234,6 +240,8 @@ export interface ServerState {
   videos: VideoInfo[];
   video: VideoPlayback | null;
   videoSeq: number;
+  /** The day's running order (activity ids): quiz rounds and Beat the House rounds. Made on first load. */
+  runSheet?: string[];
 }
 
 export interface MissionAssignment {
@@ -303,6 +311,7 @@ export function migrate(s: ServerState): ServerState {
     delete old.suggestions;
     delete old.rerollUsed;
   }
+  ensureRunSheet(s, s.createdAt);
   for (const a of s.activities) {
     a.format ??= "live";
     a.speedBonus ??= 0;
@@ -313,6 +322,46 @@ export function migrate(s: ServerState): ServerState {
     a.polls ??= [];
   }
   return s;
+}
+
+/** The running order: four quiz rounds with a Beat the House round between each. */
+export const RUN_SHEET_PLAN = ["round", "house", "round", "house", "round", "house", "round"] as const;
+
+/** Creates the run sheet's empty slots, once. Activities made before it stay as extras. */
+export function ensureRunSheet(s: ServerState, now: number): void {
+  if (s.runSheet) {
+    s.runSheet = s.runSheet.filter((id) => s.activities.some((a) => a.id === id));
+    return;
+  }
+  let round = 0;
+  let house = 0;
+  s.runSheet = RUN_SHEET_PLAN.map((slot) => {
+    const isRound = slot === "round";
+    const a: Activity = {
+      id: newId(s, "a"),
+      name: isRound ? `Round ${++round}` : `Beat the House ${++house}`,
+      format: isRound ? "quiz" : "live",
+      kind: "team",
+      scoring: isRound ? "perCorrect" : "judged",
+      placements: [5, 3, 1],
+      perCorrect: 1,
+      description: "",
+      timerSeconds: 0,
+      resultsShown: false,
+      createdAt: now,
+      speedBonus: 0,
+      questionSeconds: 30,
+      questions: [],
+      pollKind: "general",
+      foolBonus: 0,
+      polls: [],
+      videoId: null,
+      clips: [],
+      house: isRound ? null : { direction: "high", teamPoints: 5, housePoints: 5, houseScore: null, teamScores: {}, settled: false },
+    };
+    s.activities.push(a);
+    return a.id;
+  });
 }
 
 export function freshDraw(revealMode: RevealMode = "live", oddFallback: OddFallback | null = null): DrawState {

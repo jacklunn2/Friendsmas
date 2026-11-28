@@ -55,8 +55,7 @@ export function totalsFrom(s: ServerState, entries: LedgerEntry[]) {
   return { teams, players };
 }
 
-/** Best first. Tied teams share a rank (1, 2, 2, 4) and keep team order. */
-/** The House's points: entries under HOUSE_ID. It's never a team, so never ranked. */
+/** The House's points: entries under HOUSE_ID. */
 export function houseTotal(entries: LedgerEntry[]): number {
   return entries.filter((e) => e.teamId === HOUSE_ID).reduce((n, e) => n + e.points, 0);
 }
@@ -66,6 +65,7 @@ function housePlays(s: ServerState): boolean {
   return s.activities.some((a) => a.house) || s.ledger.some((e) => e.teamId === HOUSE_ID);
 }
 
+/** Best first. Tied teams share a rank (1, 2, 2, 4) and keep team order. */
 export function rank(
   totals: Record<string, number>,
   order: { id: string; order: number }[],
@@ -81,18 +81,31 @@ export function rank(
   });
 }
 
+/**
+ * Teams ranked with the House among them. The House wins ties, so it sits
+ * above every team it has at least matched, and those teams drop a place.
+ */
+export function rankWithHouse(teamTotals: Record<string, number>, house: number | null, order: { id: string; order: number }[]) {
+  const rows = rank(teamTotals, order);
+  if (house === null) return { rows, houseRank: null };
+  const ahead = rows.filter((r) => r.points > house).length;
+  return { rows: rows.map((r) => (r.points <= house ? { ...r, rank: r.rank + 1 } : r)), houseRank: ahead + 1 };
+}
+
 export function standingsView(s: ServerState): StandingsView | null {
   const current = s.snapshots.at(-1);
   if (!current) return null;
   const previous = s.snapshots.length > 1 ? s.snapshots.at(-2)! : null;
-  const prevRanks = previous ? rank(previous.teams, s.teams) : [];
-  const rows: StandingsRow[] = rank(current.teams, s.teams).map((r) => {
-    const prev = prevRanks.find((p) => p.teamId === r.teamId);
+  const plays = housePlays(s);
+  const now = rankWithHouse(current.teams, plays ? (current.house ?? 0) : null, s.teams);
+  const before = previous ? rankWithHouse(previous.teams, plays ? (previous.house ?? 0) : null, s.teams) : null;
+  const rows: StandingsRow[] = now.rows.map((r) => {
+    const prev = before?.rows.find((p) => p.teamId === r.teamId);
     return { ...r, prevPoints: prev ? prev.points : null, prevRank: prev ? prev.rank : null };
   });
   const house =
-    housePlays(s) && current.house !== undefined
-      ? { points: current.house, prevPoints: previous?.house ?? null }
+    plays && now.houseRank !== null
+      ? { points: current.house ?? 0, prevPoints: previous ? (previous.house ?? 0) : null, rank: now.houseRank, prevRank: before?.houseRank ?? null }
       : null;
   return { seq: current.seq, at: current.at, final: current.final, rows, house };
 }
@@ -194,6 +207,11 @@ export const scoringHost: Record<string, Handler> = {
   "activity.update": (s, _a, p) => {
     const a = findActivity(s, p.id);
     const f = activityFields(p);
+    // Run sheet slots keep their type: only the name and timings change.
+    if (s.runSheet?.includes(a.id)) {
+      Object.assign(a, { name: f.name, description: f.description, timerSeconds: f.timerSeconds, perCorrect: f.perCorrect, questionSeconds: f.questionSeconds });
+      return { audit: ["activity.update", a.name] };
+    }
     const used = entriesFor(s, a.id).some((e) => !e.voided);
     if (used && (f.kind !== a.kind || f.scoring !== a.scoring || f.format !== (a.format ?? "live") || f.pollKind !== (a.pollKind ?? "general"))) {
       throw new UserError("Points have been awarded in this activity, so its type and scoring can't change. Void them first.");
@@ -204,6 +222,7 @@ export const scoringHost: Record<string, Handler> = {
 
   "activity.delete": (s, _a, p) => {
     const a = findActivity(s, p.id);
+    if (s.runSheet?.includes(a.id)) throw new UserError(`${a.name} is part of the running order, so it can't be removed. Clear it out instead.`);
     if (entriesFor(s, a.id).some((e) => !e.voided)) {
       throw new UserError(`${a.name} has points awarded. Void them before removing it.`);
     }

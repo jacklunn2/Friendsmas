@@ -107,6 +107,17 @@ export function ActivityResults({ view }: { view: StageView }) {
             </li>
           );
         })}
+        {res.house !== null && (
+          <li className={`board-row board-row--house${animate ? " is-animated" : ""}`} style={{ animationDelay: `${(delays[0] ?? 0) + 600}ms` } as CSSProperties}>
+            <span className="board-row__place">🏠</span>
+            <span className="board-row__team">
+              <span className="board-row__name">The House</span>
+              <span className="board-row__house-note">{a.house ? "nobody beat it" : "matches the lowest team"}</span>
+            </span>
+            <span className="board-row__earners" />
+            <span className="board-row__points">{signed(res.house)}</span>
+          </li>
+        )}
       </ol>
     </section>
   );
@@ -124,13 +135,22 @@ export function Standings({ view }: { view: StageView }) {
   const rows = st?.rows ?? [];
   const delays = useMemo(() => (animate ? rowDelays(rows.length, final) : rows.map(() => 0)), [animate, rows.length, final]);
   const winners = rows.filter((r) => r.rank === 1);
+  const house = st?.house ?? null;
+  const houseWins = house?.rank === 1;
+  // Where the House goes: above every team it has at least matched (it wins ties).
+  const houseAt = house ? (() => {
+    const i = rows.findIndex((r) => r.points <= house.points);
+    return i === -1 ? rows.length : i;
+  })() : -1;
+  // A House in the lead is revealed last, after the top team.
+  const houseDelay = !animate ? 0 : houseAt >= rows.length ? Math.max(0, (delays[rows.length - 1] ?? 0) - 700) : houseAt === 0 ? delays[0] + 1400 : delays[houseAt] + 450;
   const [showWinner, setShowWinner] = useState(!animate && final);
 
   // Sound and the winner moment, timed to the rows.
   useEffect(() => {
     if (!animate || !rows.length) return;
     const timers: ReturnType<typeof setTimeout>[] = [];
-    const leaderAt = delays[0];
+    const leaderAt = houseWins ? houseDelay : delays[0];
     rows.forEach((_, i) => {
       if (i === 0) return;
       timers.push(setTimeout(() => audioOn() && sfx.thud(), delays[i]));
@@ -146,12 +166,6 @@ export function Standings({ view }: { view: StageView }) {
   }, [animate, st?.seq]);
 
   if (!st) return null;
-  // Where the House goes: above the first team with fewer points (ties go below the teams).
-  const houseAt = st.house ? (() => {
-    const i = rows.findIndex((r) => r.points < st.house!.points);
-    return i === -1 ? rows.length : i;
-  })() : -1;
-  const houseDelay = !animate ? 0 : houseAt >= rows.length ? 0 : houseAt === 0 ? Math.max(0, delays[0] - 700) : delays[houseAt] + 450;
 
   return (
     <section className={`scene board${final ? " board--final" : ""}`}>
@@ -164,12 +178,12 @@ export function Standings({ view }: { view: StageView }) {
           const team = teams.get(r.teamId);
           if (!team) return null;
           const line = <StandingsLine key={r.teamId} row={r} team={team} players={players} delay={delays[i]} animate={animate} leader={i === 0} />;
-          // The House sits where its points put it, but never takes a place.
+          // The House takes its place among the teams.
           return houseAt === i ? [<HouseLine key="house" house={st.house!} delay={houseDelay} animate={animate} />, line] : line;
         })}
         {st.house && houseAt === rows.length && <HouseLine key="house" house={st.house} delay={houseDelay} animate={animate} />}
       </ol>
-      {final && showWinner && <Winners rows={winners} teams={teams} players={players} />}
+      {final && showWinner && (houseWins ? <HouseWins /> : <Winners rows={winners} teams={teams} players={players} />)}
     </section>
   );
 }
@@ -210,17 +224,24 @@ function StandingsLine({
   );
 }
 
-function HouseLine({ house, delay, animate }: { house: { points: number; prevPoints: number | null }; delay: number; animate: boolean }) {
+function HouseLine({ house, delay, animate }: { house: NonNullable<NonNullable<StageView["standings"]>["house"]>; delay: number; animate: boolean }) {
   const points = useCountUp(animate ? (house.prevPoints ?? 0) : house.points, house.points, delay + 250, 900);
   const gained = house.prevPoints === null ? null : house.points - house.prevPoints;
+  const moved = house.prevRank === null ? 0 : house.prevRank - house.rank;
   return (
-    <li className={`board-row board-row--house${animate ? " is-animated" : ""}`} style={{ animationDelay: `${delay}ms` } as CSSProperties}>
-      <span className="board-row__place" aria-label="The House can't win">🏠</span>
+    <li className={`board-row board-row--house${house.rank === 1 ? " board-row--leader" : ""}${animate ? " is-animated" : ""}`} style={{ animationDelay: `${delay}ms` } as CSSProperties}>
+      <span className="board-row__place">{ordinal(house.rank)}</span>
       <span className="board-row__team">
-        <span className="board-row__name">The House</span>
-        <span className="board-row__house-note">can't win</span>
+        <span className="board-row__name">🏠 The House</span>
       </span>
-      <span className="board-row__move">{gained !== null && gained !== 0 && <span className="board-row__gained">{signed(gained)}</span>}</span>
+      <span className="board-row__move">
+        {gained !== null && gained !== 0 && <span className="board-row__gained">{signed(gained)}</span>}
+        {moved !== 0 && (
+          <span className={`board-row__arrow ${moved > 0 ? "is-up" : "is-down"}`} aria-label={moved > 0 ? `Up ${moved}` : `Down ${-moved}`}>
+            {moved > 0 ? "▲" : "▼"} {Math.abs(moved)}
+          </span>
+        )}
+      </span>
       <span className="board-row__points">{points}</span>
     </li>
   );
@@ -263,6 +284,23 @@ function Winners({ rows, teams, players }: { rows: StandingsRow[]; teams: Map<st
           </div>
         ))}
         {tie && <p className="winner__hint">Time for a sudden-death tie-breaker.</p>}
+      </div>
+    </div>
+  );
+}
+
+function HouseWins() {
+  return (
+    <div className="winner winner--house" role="status">
+      <div className="winner__card">
+        <p className="winner__kicker">The winner of Friendsmas is…</p>
+        <div className="winner__team">
+          <div className="winner__house-mark" aria-hidden>
+            🏠
+          </div>
+          <h2 className="winner__name">The House</h2>
+          <p className="winner__members">The House always wins. Better luck next Christmas.</p>
+        </div>
       </div>
     </div>
   );

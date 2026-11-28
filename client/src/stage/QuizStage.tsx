@@ -1,7 +1,7 @@
 // The quiz on the TV.
 
-import { useEffect, useMemo, useRef } from "react";
-import { OPTION_LETTERS, imageUrl, signed, teamDisplayName, type StageView } from "../../../shared/types";
+import { useEffect, useMemo, useRef, type CSSProperties } from "react";
+import { OPTION_LETTERS, imageUrl, signed, teamDisplayName, type LiveQuestion, type PublicPlayer, type PublicTeam, type StageView } from "../../../shared/types";
 import { audioOn, sfx } from "../audio";
 import { useTicker } from "../net";
 import { Avatar, formatClock, playerMap, teamStyle } from "../ui";
@@ -45,6 +45,7 @@ export function QuizStage({ view, serverNow }: { view: StageView; serverNow: () 
           📱 {a.kind === "team" ? "Answer on your phones: one answer per team, and the last one in counts." : "Answer on your own phone. Every right answer scores for your team."}
         </p>
         {a.speedBonus > 0 && <p className="quiz-intro__bonus">Fastest right answer: +{a.speedBonus} bonus</p>}
+        {a.houseMatchesLowest && <p className="quiz-intro__bonus">🏠 The House scores the same as the lowest team this round.</p>}
       </section>
     );
   }
@@ -53,7 +54,9 @@ export function QuizStage({ view, serverNow }: { view: StageView; serverNow: () 
   const results = new Map((qz.reveal?.results ?? []).map((r) => [r.answererId, r]));
   const answered = new Set(qz.answeredIds);
   const choices = q.type === "choice" || q.type === "truefalse";
+  const voting = !!q.choices;
   const correctIndex = revealed ? (qz.reveal!.correctIndex ?? -1) : -1;
+  const teamMap = new Map(view.teams.map((t) => [t.id, t]));
 
   const answerers =
     qz.kind === "team"
@@ -81,8 +84,24 @@ export function QuizStage({ view, serverNow }: { view: StageView; serverNow: () 
       <div className="quiz-q__body">
         {q.imageId && <img className="quiz-q__image" src={imageUrl(q.imageId, view.eventCode)} alt="" />}
         <div className="quiz-q__main">
-          <h1 className="quiz-q__prompt">{q.prompt}</h1>
-          {choices ? (
+          {q.type === "whowrote" && <p className="quiz-q__kicker">Who wrote this?</p>}
+          <h1 className={`quiz-q__prompt${q.type === "whowrote" ? " quiz-q__prompt--fact" : ""}`}>{q.type === "whowrote" ? `“${q.prompt}”` : q.prompt}</h1>
+          {voting ? (
+            revealed ? (
+              q.type === "whowrote" ? (
+                <Writer player={qz.reveal!.writerId ? players.get(qz.reveal!.writerId) : undefined} />
+              ) : (
+                <VoteBars q={q} counts={qz.reveal!.counts ?? {}} winners={qz.reveal!.winners} players={players} teams={teamMap} />
+              )
+            ) : (
+              <>
+                <VoteChoices q={q} players={players} teams={teamMap} />
+                <p className="quiz-q__type-hint">
+                  {q.type === "whowrote" ? "Guess who wrote it on your phone. Their own team can't score." : "Vote on your phone. Teams that pick the most popular answer score."}
+                </p>
+              </>
+            )
+          ) : choices ? (
             <ol className={`quiz-options quiz-options--${q.options.length}`}>
               {q.options.map((o, i) => (
                 <li key={i} className={`quiz-option${revealed ? (i === correctIndex ? " is-correct" : " is-dim") : ""}`}>
@@ -124,5 +143,96 @@ export function QuizStage({ view, serverNow }: { view: StageView; serverNow: () 
         })}
       </ul>
     </section>
+  );
+}
+
+/** What teams can pick in a poll or "Who wrote this?", before the reveal. */
+function VoteChoices({ q, players, teams }: { q: LiveQuestion; players: Map<string, PublicPlayer>; teams: Map<string, PublicTeam> }) {
+  const list = q.choices ?? [];
+  if (q.optionsKind === "players") {
+    return (
+      <ul className="quiz-faces">
+        {list.map((c) => {
+          const p = players.get(c.key);
+          return (
+            <li key={c.key} className="quiz-face">
+              {p && <Avatar player={p} className="quiz-face__photo" />}
+              <span className="quiz-face__name">{c.label}</span>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+  return (
+    <ol className={`quiz-options quiz-options--${Math.min(list.length, 6)}`}>
+      {list.map((c, i) => {
+        const t = teams.get(c.key);
+        return (
+          <li key={c.key} className="quiz-option" style={t ? teamStyle(t) : undefined}>
+            {q.optionsKind === "custom" && <span className="quiz-option__letter">{OPTION_LETTERS[i]}</span>}
+            <span className="quiz-option__text">{t ? teamDisplayName(t) : c.label}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** How the teams voted, most popular first. */
+function VoteBars({
+  q,
+  counts,
+  winners,
+  players,
+  teams,
+}: {
+  q: LiveQuestion;
+  counts: Record<string, number>;
+  winners: string[];
+  players: Map<string, PublicPlayer>;
+  teams: Map<string, PublicTeam>;
+}) {
+  const max = Math.max(1, ...Object.values(counts));
+  const ranked = (q.choices ?? []).filter((c) => counts[c.key]).sort((x, y) => counts[y.key] - counts[x.key]);
+  if (!ranked.length) return <p className="poll-stage__empty">Nobody voted!</p>;
+  return (
+    <ol className="poll-bars quiz-q__bars">
+      {ranked.map((c, i) => {
+        const p = players.get(c.key);
+        const t = teams.get(c.key);
+        const win = winners.includes(c.key);
+        return (
+          <li
+            key={c.key}
+            className={`poll-bar${win ? " is-winner" : ""}`}
+            style={{ "--w": `${(counts[c.key] / max) * 100}%`, animationDelay: `${(ranked.length - 1 - i) * 350}ms`, ...(t ? teamStyle(t) : {}) } as CSSProperties}
+          >
+            <span className="poll-bar__who">
+              {p && <Avatar player={p} className="poll-bar__photo" />}
+              <span className="poll-bar__name">{t ? teamDisplayName(t) : c.label}</span>
+              {win && (
+                <span className="poll-bar__crown" aria-label="Most popular">
+                  👑
+                </span>
+              )}
+            </span>
+            <span className="poll-bar__track">
+              <span className="poll-bar__fill" />
+            </span>
+            <span className="poll-bar__count">{counts[c.key]}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function Writer({ player }: { player: PublicPlayer | undefined }) {
+  return (
+    <div className="unmask__writer quiz-q__writer">
+      {player ? <Avatar player={player} className="unmask__photo" /> : <span className="unmask__photo">?</span>}
+      <p className="unmask__name">It was {player?.name ?? "a mystery"}!</p>
+    </div>
   );
 }

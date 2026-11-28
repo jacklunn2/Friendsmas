@@ -7,6 +7,7 @@ import {
   NAME_MAX,
   SPIN_MS,
   formatPoints,
+  ordinal,
   placeLabel,
   scoringSummary,
   teamDisplayName,
@@ -546,15 +547,30 @@ function MyStandings({ view, serverNow }: { view: PlayerView; serverNow: () => n
   const teams = new Map(view.teams.map((t) => [t.id, t]));
   const winners = st.rows.filter((r) => r.rank === 1).map((r) => teams.get(r.teamId)).filter(Boolean);
   const won = mine?.rank === 1;
+  const houseWon = st.house?.rank === 1;
+  // The House sits above every team it has at least matched.
+  const houseAt = st.house ? (() => {
+    const i = st.rows.findIndex((r) => r.points <= st.house!.points);
+    return i === -1 ? st.rows.length : i;
+  })() : -1;
+  const houseRow = st.house ? (
+    <li key="house" className="standings-card__row standings-card__row--house">
+      <span className="standings-card__place">{ordinal(st.house.rank)}</span>
+      <span className="standings-card__team">🏠 The House</span>
+      <span className="standings-card__pts">{st.house.points}</span>
+    </li>
+  ) : null;
   return (
     <div className={`standings-card${st.final && won ? " is-winner" : ""}`}>
       {st.final ? (
         <p className="standings-card__headline">
-          {won
-            ? winners.length > 1
-              ? "🏆 You tied for first!"
-              : "🏆 Your team won Friendsmas!"
-            : `${winners.map((t) => teamDisplayName(t!)).join(" and ")} ${winners.length > 1 ? "tied for first" : "won"}. You finished ${mine ? placeLabel(mine) : "–"}.`}
+          {houseWon
+            ? `🏠 The House wins Friendsmas! You finished ${mine ? placeLabel(mine) : "–"}.`
+            : won
+              ? winners.length > 1
+                ? "🏆 You tied for first!"
+                : "🏆 Your team won Friendsmas!"
+              : `${winners.map((t) => teamDisplayName(t!)).join(" and ")} ${winners.length > 1 ? "tied for first" : "won"}. You finished ${mine ? placeLabel(mine) : "–"}.`}
         </p>
       ) : (
         mine && (
@@ -570,10 +586,10 @@ function MyStandings({ view, serverNow }: { view: PlayerView; serverNow: () => n
       )}
       {view.blackout && !st.final && <p className="phone__muted">The leaderboard is frozen until the finale.</p>}
       <ol className="standings-card__list">
-        {st.rows.map((r) => {
+        {st.rows.map((r, i) => {
           const t = teams.get(r.teamId);
           if (!t) return null;
-          return (
+          const row = (
             <li key={r.teamId} className={`standings-card__row${r.teamId === team.id ? " is-mine" : ""}`} style={teamStyle(t)}>
               <span className="standings-card__place">{placeLabel(r)}</span>
               <span className="standings-card__team">
@@ -582,7 +598,9 @@ function MyStandings({ view, serverNow }: { view: PlayerView; serverNow: () => n
               <span className="standings-card__pts">{r.points}</span>
             </li>
           );
+          return houseAt === i ? [houseRow, row] : row;
         })}
+        {houseAt === st.rows.length && houseRow}
       </ol>
     </div>
   );

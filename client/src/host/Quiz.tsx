@@ -9,6 +9,8 @@ import {
   OPTION_MAX,
   QUESTION_MAX,
   QUESTION_TYPE_LABEL,
+  ROUND_QUESTIONS,
+  VOTE_TYPES,
   answerText,
   formatNumber,
   imageUrl,
@@ -17,6 +19,7 @@ import {
   type HostPlayer,
   type HostQuizAnswer,
   type HostView,
+  type PollOptionsKind,
   type QuestionType,
   type QuestionView,
 } from "../../../shared/types";
@@ -53,7 +56,8 @@ export function QuizPad({ activity: a, view, run, players, serverNow }: Props) {
           Run the quiz
         </button>
         <button role="tab" aria-selected={tab === "questions"} className={`tabs__tab${tab === "questions" ? " is-selected" : ""}`} onClick={() => setTab("questions")}>
-          Questions ({questions.length})
+          Questions ({questions.length}
+          {view.runSheet.includes(a.id) ? ` of ${ROUND_QUESTIONS}` : ""})
         </button>
       </div>
       {tab === "run" ? (
@@ -122,7 +126,12 @@ function Presenter({ activity: a, view, run, players, serverNow, onEdit }: Props
               {live.phase === "open" ? (left !== null ? `Open · ${formatClock(left)}` : "Open · no timer") : live.phase === "closed" ? "Answers closed" : "Answer revealed"}
             </span>
           </div>
-          <QuestionBody q={q} showAnswer />
+          <QuestionBody q={q} view={view} showAnswer />
+          {q.videoId && (
+            <button className="btn btn--small btn--secondary" onClick={() => run("video.play", { videoId: q.videoId, activityId: a.id }, "Playing the clip on the TV")}>
+              ▶ Play the clip again
+            </button>
+          )}
           {(q.notes || q.fact) && (
             <div className="presenter__notes">
               {q.notes && (
@@ -203,19 +212,51 @@ function NextUp({ q, number }: { q: QuestionView; number: number }) {
   return (
     <div className="next-up">
       <p className="host__muted">Next: question {number}</p>
-      <p className="next-up__prompt">{q.prompt}</p>
+      <p className="next-up__prompt">{q.type === "whowrote" ? "Who wrote this? (a secret fact)" : q.prompt}</p>
       <p className="host__muted">Answer: {answerText(q)}</p>
     </div>
   );
 }
 
-function QuestionBody({ q, showAnswer }: { q: QuestionView; showAnswer?: boolean }) {
+/** A guest's secret fact and who wrote it, for "Who wrote this?" questions. */
+export function factLookup(view: HostView, factId: string | null) {
+  if (!factId) return null;
+  for (const [playerId, qn] of Object.entries(view.questionnaires)) {
+    const f = qn.facts.find((x) => x.id === factId);
+    if (f) return { text: f.text, writer: view.roster.find((p) => p.id === playerId)?.name ?? "A guest" };
+  }
+  return null;
+}
+
+const POLL_KIND_LABEL: Record<PollOptionsKind, string> = { custom: "Your own options", players: "A guest", teams: "A team" };
+
+function QuestionBody({ q, view, showAnswer }: { q: QuestionView; view: HostView; showAnswer?: boolean }) {
   const code = useContext(EventCodeContext);
+  const fact = q.type === "whowrote" ? factLookup(view, q.factId) : null;
+  const videoName = q.videoId ? view.videos.find((v) => v.id === q.videoId)?.name : null;
   return (
     <div className="qbody">
       {q.imageId && <img className="qbody__image" src={imageUrl(q.imageId, code)} alt="" />}
       <div className="qbody__text">
-        <p className="qbody__prompt">{q.prompt}</p>
+        {videoName && <p className="host__muted">🎬 Plays first on the TV: {videoName}</p>}
+        <p className="qbody__prompt">{q.type === "whowrote" ? `“${fact?.text ?? "(this fact has been removed)"}”` : q.prompt}</p>
+        {q.type === "whowrote" && showAnswer && fact && (
+          <p className="qbody__answer">
+            Written by <strong>{fact.writer}</strong>. Their team can't score on this one.
+          </p>
+        )}
+        {q.type === "poll" && (
+          <>
+            <p className="host__muted">Teams vote for: {POLL_KIND_LABEL[q.optionsKind]}. Teams that pick the most popular answer score.</p>
+            {q.optionsKind === "custom" && (
+              <ol className="qbody__options">
+                {q.options.map((o, i) => (
+                  <li key={i}>{o}</li>
+                ))}
+              </ol>
+            )}
+          </>
+        )}
         {(q.type === "choice" || q.type === "truefalse") && (
           <ol className="qbody__options">
             {q.options.map((o, i) => (
@@ -261,8 +302,15 @@ function Answers({
     }
     return players.get(ans.answererId)?.name ?? "A guest";
   };
+  const choices = view.quiz?.question?.choices ?? [];
   const shown = (ans: HostQuizAnswer) =>
-    q.type === "choice" || q.type === "truefalse" ? `${q.type === "choice" ? `${OPTION_LETTERS[Number(ans.value)]}: ` : ""}${q.options[Number(ans.value)] ?? "?"}` : q.type === "number" ? formatNumber(Number(ans.value)) : ans.value;
+    VOTE_TYPES.includes(q.type)
+      ? (choices.find((c) => c.key === ans.value)?.label ?? "?")
+      : q.type === "choice" || q.type === "truefalse"
+        ? `${q.type === "choice" ? `${OPTION_LETTERS[Number(ans.value)]}: ` : ""}${q.options[Number(ans.value)] ?? "?"}`
+        : q.type === "number"
+          ? formatNumber(Number(ans.value))
+          : ans.value;
   const toReview = answers.filter((x) => x.auto === "close" && x.override === null).length;
 
   return (
@@ -315,7 +363,7 @@ function QuestionBank({ activity: a, view, run }: { activity: ActivityView; view
 
   if (editing) {
     const q = editing === "new" ? undefined : questions.find((x) => x.id === editing);
-    return <QuestionForm activity={a} question={q} number={q ? questions.indexOf(q) + 1 : questions.length + 1} run={run} onDone={() => setEditing(null)} />;
+    return <QuestionForm activity={a} view={view} question={q} number={q ? questions.indexOf(q) + 1 : questions.length + 1} run={run} onDone={() => setEditing(null)} />;
   }
   if (importing) return <ImportForm activity={a} run={run} onDone={() => setImporting(false)} />;
 
@@ -329,6 +377,12 @@ function QuestionBank({ activity: a, view, run }: { activity: ActivityView; view
           Paste from a spreadsheet
         </button>
       </div>
+      {view.runSheet.includes(a.id) && (
+        <p className={`host__muted bank__count${questions.length === ROUND_QUESTIONS ? " is-full" : ""}`}>
+          {questions.length} of {ROUND_QUESTIONS} questions written
+          {questions.length > ROUND_QUESTIONS ? ` (${questions.length - ROUND_QUESTIONS} more than planned)` : ""}
+        </p>
+      )}
       {questions.length === 0 ? (
         <p className="host__muted">No questions yet. Guests never see them until you open each one during the game.</p>
       ) : (
@@ -337,10 +391,11 @@ function QuestionBank({ activity: a, view, run }: { activity: ActivityView; view
             <li key={q.id} className="qlist__row">
               <span className="qlist__num">{i + 1}</span>
               <span className="qlist__prompt">
-                {q.prompt}
+                {q.type === "whowrote" ? `“${factLookup(view, q.factId)?.text ?? "(fact removed)"}”` : q.prompt}
                 <span className="host__muted qlist__detail">
-                  {QUESTION_TYPE_LABEL[q.type]} · {answerText(q)}
-                  {q.imageId ? " · picture" : ""}
+                  {QUESTION_TYPE_LABEL[q.type]} · {q.type === "whowrote" ? `written by ${factLookup(view, q.factId)?.writer ?? "?"}` : answerText(q)}
+                  {q.imageId ? " · photo" : ""}
+                  {q.videoId ? " · video" : ""}
                 </span>
               </span>
               <span className="qlist__tools">
@@ -370,11 +425,28 @@ function QuestionBank({ activity: a, view, run }: { activity: ActivityView; view
   );
 }
 
-function QuestionForm({ activity: a, question, number, run, onDone }: { activity: ActivityView; question?: QuestionView; number: number; run: Run; onDone: () => void }) {
+function QuestionForm({
+  activity: a,
+  view,
+  question,
+  number,
+  run,
+  onDone,
+}: {
+  activity: ActivityView;
+  view: HostView;
+  question?: QuestionView;
+  number: number;
+  run: Run;
+  onDone: () => void;
+}) {
   const code = useContext(EventCodeContext);
   const [type, setType] = useState<QuestionType>(question?.type ?? "choice");
-  const [prompt, setPrompt] = useState(question?.prompt ?? "");
-  const [options, setOptions] = useState<string[]>(question?.type === "choice" ? question.options : ["", "", "", ""]);
+  const [prompt, setPrompt] = useState(question?.type === "whowrote" ? "" : (question?.prompt ?? ""));
+  const [options, setOptions] = useState<string[]>(question?.type === "choice" || question?.type === "poll" ? question.options : ["", "", "", ""]);
+  const [optionsKind, setOptionsKind] = useState<PollOptionsKind>(question?.optionsKind ?? "custom");
+  const [factId, setFactId] = useState<string>(question?.factId ?? "");
+  const [videoId, setVideoId] = useState<string>(question?.videoId ?? "");
   const [correct, setCorrect] = useState(question?.correctIndex ?? 0);
   const [numberAnswer, setNumberAnswer] = useState(question?.numberAnswer !== null && question?.numberAnswer !== undefined ? String(question.numberAnswer) : "");
   const [accepted, setAccepted] = useState((question?.accepted ?? []).join("\n"));
@@ -420,6 +492,9 @@ function QuestionForm({ activity: a, question, number, run, onDone }: { activity
           numberAnswer,
           accepted: accepted.split("\n"),
           imageId,
+          videoId: videoId || null,
+          optionsKind,
+          factId: factId || null,
           points: points === "" ? null : Number(points),
           seconds: seconds === "" ? null : Number(seconds),
           notes,
@@ -437,6 +512,8 @@ function QuestionForm({ activity: a, question, number, run, onDone }: { activity
       setNumberAnswer("");
       setAccepted("");
       setImageId(null);
+      setVideoId("");
+      setFactId("");
       setNotes("");
       setFact("");
     } else onDone();
@@ -462,10 +539,52 @@ function QuestionForm({ activity: a, question, number, run, onDone }: { activity
           </button>
         ))}
       </div>
-      <label className="field">
-        <span className="field__label">Question</span>
-        <textarea className="input input--area" rows={2} maxLength={QUESTION_MAX} value={prompt} onChange={(e) => setPrompt(e.target.value)} required autoFocus />
-      </label>
+      {type === "whowrote" ? (
+        <FactPicker view={view} factId={factId} setFactId={setFactId} currentQuestionId={question?.id} />
+      ) : (
+        <label className="field">
+          <span className="field__label">Question</span>
+          <textarea className="input input--area" rows={2} maxLength={QUESTION_MAX} value={prompt} onChange={(e) => setPrompt(e.target.value)} required autoFocus />
+        </label>
+      )}
+
+      {type === "poll" && (
+        <fieldset className="choice">
+          <legend className="choice__legend">Teams vote for</legend>
+          <div className="segmented" role="radiogroup" aria-label="Teams vote for">
+            {(Object.keys(POLL_KIND_LABEL) as PollOptionsKind[]).map((k) => (
+              <button type="button" key={k} role="radio" aria-checked={optionsKind === k} className={optionsKind === k ? "is-selected" : ""} onClick={() => setOptionsKind(k)}>
+                {POLL_KIND_LABEL[k]}
+              </button>
+            ))}
+          </div>
+          {optionsKind === "custom" &&
+            options.map((o, i) => (
+              <div key={i} className="qform__option qform__option--plain">
+                <span className="qbody__letter">{OPTION_LETTERS[i]}</span>
+                <input className="input input--small" value={o} maxLength={OPTION_MAX} onChange={(e) => setOptions(options.map((x, j) => (j === i ? e.target.value : x)))} />
+                {options.length > 2 && (
+                  <button type="button" className="btn btn--small btn--ghost" aria-label={`Remove option ${OPTION_LETTERS[i]}`} onClick={() => setOptions(options.filter((_, j) => j !== i))}>
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+          {optionsKind === "custom" && options.length < MAX_OPTIONS && (
+            <button type="button" className="btn btn--small btn--ghost" onClick={() => setOptions([...options, ""])}>
+              Add an option
+            </button>
+          )}
+          <p className="host__muted">
+            {optionsKind === "players"
+              ? "Every guest's photo and name appear as the choices."
+              : optionsKind === "teams"
+                ? "Every team appears as a choice; a team can't vote for itself."
+                : "Write the choices teams pick between."}{" "}
+            Teams that pick the most popular answer score.
+          </p>
+        </fieldset>
+      )}
 
       {type === "choice" && (
         <fieldset className="choice">
@@ -526,17 +645,29 @@ function QuestionForm({ activity: a, question, number, run, onDone }: { activity
           <>
             <img src={imageUrl(imageId, code)} alt="" />
             <button type="button" className="btn btn--small btn--ghost" onClick={() => setImageId(null)}>
-              Remove the picture
+              Remove the photo
             </button>
           </>
         ) : (
           <button type="button" className="btn btn--small btn--ghost" disabled={busy} onClick={() => file.current?.click()}>
-            {busy ? "Uploading…" : "Add a picture (shown on the TV)"}
+            {busy ? "Uploading…" : "Add a photo (shown on the TV and phones)"}
           </button>
         )}
         <input ref={file} type="file" accept="image/*" hidden onChange={(e) => upload(e.target.files?.[0])} />
         {uploadError && <p className="form-error">{uploadError}</p>}
       </div>
+      <label className="field field--inline video-pick">
+        <span className="field__label">Video clip (plays on the TV when the question opens; the timer starts after it)</span>
+        <select className="input input--small" value={videoId} onChange={(e) => setVideoId(e.target.value)}>
+          <option value="">None</option>
+          {view.videos.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.name}
+            </option>
+          ))}
+        </select>
+        {!view.videos.length && <span className="host__muted">Upload clips in the Videos panel at the bottom of the page.</span>}
+      </label>
 
       <div className="qform__row">
         <label className="field field--inline">
@@ -570,6 +701,43 @@ function QuestionForm({ activity: a, question, number, run, onDone }: { activity
         </button>
       </div>
     </form>
+  );
+}
+
+/** Picks a guest's secret fact for a "Who wrote this?" question. */
+function FactPicker({
+  view,
+  factId,
+  setFactId,
+  currentQuestionId,
+}: {
+  view: HostView;
+  factId: string;
+  setFactId: (id: string) => void;
+  currentQuestionId?: string;
+}) {
+  const used = new Set(
+    view.activities
+      .flatMap((x) => view.questions[x.id] ?? [])
+      .filter((q) => q.type === "whowrote" && q.id !== currentQuestionId)
+      .map((q) => q.factId),
+  );
+  const facts = view.roster.flatMap((p) => (view.questionnaires[p.id]?.facts ?? []).map((f) => ({ ...f, writer: p.name })));
+  if (!facts.length) return <p className="callout">No secret facts yet. They come from the guests' questionnaires.</p>;
+  return (
+    <label className="field">
+      <span className="field__label">The secret fact (only you can see who wrote it)</span>
+      <select className="input" value={factId} onChange={(e) => setFactId(e.target.value)} required autoFocus>
+        <option value="">Choose a fact…</option>
+        {facts.map((f) => (
+          <option key={f.id} value={f.id}>
+            {f.writer}: {f.text}
+            {used.has(f.id) ? " (already used)" : ""}
+          </option>
+        ))}
+      </select>
+      <span className="host__muted">The fact goes up on the TV and teams guess who wrote it. The writer's team can't score on it.</span>
+    </label>
   );
 }
 
@@ -612,10 +780,10 @@ function ImportForm({ activity: a, run, onDone }: { activity: ActivityView; run:
         </thead>
         <tbody>
           <tr>
-            <td>choice, truefalse, number or text (or blank)</td>
+            <td>choice, truefalse, number, text or poll (or blank)</td>
             <td>The question</td>
             <td>The right answer. For typed answers, separate alternatives with |</td>
-            <td>For multiple choice; options are shuffled</td>
+            <td>For multiple choice (shuffled); for a poll, the other choices</td>
             <td>Optional</td>
             <td>Optional</td>
             <td>Optional</td>

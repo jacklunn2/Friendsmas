@@ -83,6 +83,11 @@ function play(s: ServerState, videoId: string, activityId: string | null, now: n
   s.video = { videoId, activityId, playing: true, positionMs: 0, since: now, seq: ++s.videoSeq };
 }
 
+/** Plays a clip on the TV now, over whatever is showing. */
+export function playClip(s: ServerState, videoId: string, activityId: string | null, now: number): void {
+  play(s, videoId, activityId, now);
+}
+
 /** When an activity goes on the TV, its clip plays first. Anything else playing stops. */
 export function startActivityVideo(s: ServerState, activityId: string | null, now: number): void {
   s.video = null;
@@ -161,6 +166,7 @@ export const showHost: Record<string, Handler> = {
     for (const a of s.activities) {
       if (a.videoId === v.id) a.videoId = null;
       if (a.clips) a.clips = a.clips.filter((id) => id !== v.id);
+      for (const q of a.questions ?? []) if (q.videoId === v.id) q.videoId = null;
     }
     s.videos = s.videos.filter((x) => x !== v);
     return { audit: ["video.delete", v.name], deleteVideos: [v.id] };
