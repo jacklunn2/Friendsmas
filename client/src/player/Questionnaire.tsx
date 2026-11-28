@@ -18,12 +18,10 @@ type Send = <T = unknown>(action: string, payload?: Record<string, unknown>) => 
 const CATEGORY_LABEL: Record<DishCategory, string> = { ...DISH_CATEGORY_LABEL, main: "Main", side: "Side", dessert: "Dessert" };
 
 export function QuestionnaireForm({
-  name,
   existing,
   send,
   onDone,
 }: {
-  name: string;
   existing: QuestionnaireView | null;
   send: Send;
   onDone?: () => void;
@@ -51,7 +49,7 @@ export function QuestionnaireForm({
 
   return (
     <form className="phone__card quest" onSubmit={submit}>
-      <h1 className="phone__title">{existing ? "Your answers" : `A few questions, ${name}`}</h1>
+      <h1 className="phone__title">{existing ? "Your answers" : "A few questions"}</h1>
       {!existing && <p>Two minutes, then you're done. You can change your answers any time before the day.</p>}
 
       <fieldset className="quest__group">

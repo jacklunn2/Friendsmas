@@ -92,7 +92,7 @@ function MeSheet({ view, send, getToken }: { view: PlayerView; send: Send; getTo
 function FoodSheet({ view, send }: { view: PlayerView; send: Send }) {
   const q = view.myQuestionnaire;
   const [editing, setEditing] = useState(!q);
-  if (editing || !q) return <QuestionnaireForm name={view.me!.name} existing={q} send={send} onDone={() => setEditing(false)} />;
+  if (editing || !q) return <QuestionnaireForm existing={q} send={send} onDone={() => setEditing(false)} />;
   return (
     <section className="phone__card food-sheet">
       <h2 className="phone__title">Your food</h2>
