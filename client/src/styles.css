@@ -5021,3 +5021,24 @@ img.member__emoji {
   text-align: center;
 }
 .stage__link { color: var(--brass); }
+
+/* Welcome screen: a bigger trophy */
+.welcome.welcome--photos {
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.95fr) minmax(0, 0.95fr);
+}
+.welcome__trophy {
+  flex: 1 1 auto;
+  display: grid;
+  justify-items: center;
+}
+.welcome__trophy img,
+.welcome--photos .welcome__trophy img {
+  max-height: 46vh;
+  max-width: 100%;
+}
+.welcome--photos .welcome__qr {
+  width: min(8.5vw, 18vh);
+}
+.welcome__agenda {
+  flex: none;
+}
