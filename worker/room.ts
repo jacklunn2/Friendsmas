@@ -59,6 +59,10 @@ export class EventRoom extends DurableObject<Env> {
       ctx.storage.sql.exec(
         "CREATE TABLE IF NOT EXISTS video_chunks (video_id TEXT NOT NULL, idx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (video_id, idx))",
       );
+      // TVs waiting to be connected: the TV shows a 4-digit code, the host types it in.
+      ctx.storage.sql.exec(
+        "CREATE TABLE IF NOT EXISTS tv_pairings (id TEXT PRIMARY KEY, code TEXT NOT NULL, created_at INTEGER NOT NULL, event_code TEXT)",
+      );
       const stored = await ctx.storage.get<ServerState>("state");
       if (stored) {
         this.state = migrate(stored);
@@ -80,6 +84,9 @@ export class EventRoom extends DurableObject<Env> {
     if (url.pathname === "/api/image" && request.method === "POST") return this.uploadImage(request);
     const image = url.pathname.match(/^\/api\/image\/([A-Za-z0-9_-]+)$/);
     if (image && request.method === "GET") return this.serveImage(image[1], url);
+    if (url.pathname === "/api/tv/pair" && request.method === "POST") return this.startTvPairing(request);
+    const pairing = url.pathname.match(/^\/api\/tv\/pair\/([A-Za-z0-9_-]+)$/);
+    if (pairing && request.method === "GET") return this.tvPairingStatus(pairing[1]);
     if (url.pathname === "/api/video" && request.method === "POST") return this.beginVideo(request);
     const chunk = url.pathname.match(/^\/api\/video\/([A-Za-z0-9_-]+)\/chunk\/(\d+)$/);
     if (chunk && request.method === "PUT") return this.videoChunk(request, chunk[1], Number(chunk[2]));
@@ -201,6 +208,51 @@ export class EventRoom extends DurableObject<Env> {
       .toArray()[0];
     if (!row) return new Response("Not found", { status: 404 });
     return new Response(row.data, { headers: { "content-type": row.type, "cache-control": "private, max-age=31536000, immutable" } });
+  }
+
+  // -------------------------------------------------------------------------
+  // Connecting a TV: it shows a short code, the host types it into the control
+  // room, and the TV is sent the stage link. Codes last ten minutes.
+
+  private static PAIR_MS = 10 * 60_000;
+
+  private async startTvPairing(request: Request): Promise<Response> {
+    await request.arrayBuffer();
+    const sql = this.ctx.storage.sql;
+    sql.exec("DELETE FROM tv_pairings WHERE created_at < ?", Date.now() - EventRoom.PAIR_MS);
+    const waiting = sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM tv_pairings WHERE event_code IS NULL").toArray()[0].n;
+    if (waiting >= 20) return Response.json({ error: "Too many TVs waiting. Try again in a few minutes." }, { status: 429 });
+    const taken = new Set(sql.exec<{ code: string }>("SELECT code FROM tv_pairings").toArray().map((r) => r.code));
+    let code = "";
+    do {
+      code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 10000).padStart(4, "0");
+    } while (taken.has(code));
+    const id = randomToken(16);
+    sql.exec("INSERT INTO tv_pairings (id, code, created_at, event_code) VALUES (?, ?, ?, NULL)", id, code, Date.now());
+    return Response.json({ id, code, expiresInMs: EventRoom.PAIR_MS });
+  }
+
+  private tvPairingStatus(id: string): Response {
+    const row = this.ctx.storage.sql
+      .exec<{ code: string; created_at: number; event_code: string | null }>("SELECT code, created_at, event_code FROM tv_pairings WHERE id = ?", id)
+      .toArray()[0];
+    if (!row || row.created_at < Date.now() - EventRoom.PAIR_MS) return Response.json({ status: "expired" }, { status: 404 });
+    if (!row.event_code) return Response.json({ status: "waiting", code: row.code });
+    this.ctx.storage.sql.exec("DELETE FROM tv_pairings WHERE id = ?", id);
+    return Response.json({ status: "connected", eventCode: row.event_code });
+  }
+
+  /** The host typed a TV's code into the control room. */
+  private connectTv(rawCode: unknown): string {
+    const code = typeof rawCode === "string" ? rawCode.replace(/\D/g, "") : "";
+    if (code.length !== 4) throw new UserError("Type the 4-digit code shown on the TV.");
+    const sql = this.ctx.storage.sql;
+    const row = sql
+      .exec<{ id: string }>("SELECT id FROM tv_pairings WHERE code = ? AND event_code IS NULL AND created_at >= ?", code, Date.now() - EventRoom.PAIR_MS)
+      .toArray()[0];
+    if (!row) throw new UserError("No TV is showing that code. Check the number, or refresh the page on the TV for a new one.");
+    sql.exec("UPDATE tv_pairings SET event_code = ? WHERE id = ?", this.state.eventCode, row.id);
+    return code;
   }
 
   // -------------------------------------------------------------------------
@@ -378,7 +430,7 @@ export class EventRoom extends DurableObject<Env> {
       const isHost = !!token && this.state.hostTokens.some((t) => t.token === token);
       if (code === this.state.eventCode || isHost) {
         attachment = { role: "stage", playerId: null, token: isHost ? token : null };
-      } else refusal = "Open the stage from the control room.";
+      } else refusal = "This TV link is out of date.";
     } else if (role === "player") {
       if (code === this.state.eventCode) {
         const me = token ? this.state.players.find((p) => p.token === token) : undefined;
@@ -422,6 +474,16 @@ export class EventRoom extends DurableObject<Env> {
         ws.send(json({ type: "error", rid: req.rid, message: "Use the control room for that." }));
         return;
       }
+    }
+    if (req.a === "tv.connect" && att.role === "host") {
+      try {
+        const code = this.connectTv((req.p ?? {}).code);
+        this.audit("tv.connect", `Connected a TV (code ${code})`, Date.now());
+        ws.send(json({ type: "ok", rid: req.rid }));
+      } catch (err) {
+        ws.send(json({ type: "error", rid: req.rid, message: err instanceof UserError ? err.message : "Couldn't connect the TV." }));
+      }
+      return;
     }
     const actor: Actor = { role: att.role === "stage" ? "host" : att.role, playerId: att.playerId };
     const now = Date.now();

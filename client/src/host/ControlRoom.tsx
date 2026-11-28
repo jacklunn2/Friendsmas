@@ -138,8 +138,9 @@ function TopBar({ view, run, status }: { view: HostView; run: Run; status: ConnS
           className="btn btn--secondary"
           onClick={() => window.open(`/stage?c=${view.eventCode}`, "friendsmas-stage", "popup,width=1280,height=720")}
         >
-          Launch stage
+          Open TV screen on this laptop
         </button>
+        <ConnectTv run={run} />
         <button
           className={`btn ${view.intermission ? "btn--warn" : "btn--secondary"}`}
           aria-pressed={view.intermission}
@@ -847,6 +848,51 @@ function ActivityLog({ view }: { view: HostView }) {
 }
 
 // ---------------------------------------------------------------------------
+
+/** Pairs a TV that's showing friendsmas…/tv and a 4-digit code. */
+function ConnectTv({ run }: { run: Run }) {
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState("");
+  return (
+    <div className="connect-tv">
+      <button className="btn btn--secondary" aria-expanded={open} onClick={() => setOpen(!open)}>
+        Connect a TV
+      </button>
+      {open && (
+        <form
+          className="connect-tv__pop"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const ok = await run("tv.connect", { code }, "TV connected. It will show the stage in a moment.");
+            if (ok !== undefined) {
+              setCode("");
+              setOpen(false);
+            }
+          }}
+        >
+          <p className="host__muted">
+            On the TV's browser, go to <strong>{location.host}/tv</strong>, then type the code it shows.
+          </p>
+          <div className="row__actions">
+            <input
+              className="input input--small connect-tv__code"
+              inputMode="numeric"
+              maxLength={4}
+              placeholder="0000"
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+              aria-label="Code on the TV"
+              autoFocus
+            />
+            <button className="btn btn--small btn--primary" disabled={code.length !== 4}>
+              Connect
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
 
 function StartFresh({ run }: { run: Run }) {
   const [open, setOpen] = useState(false);

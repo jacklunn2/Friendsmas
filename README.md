@@ -55,7 +55,8 @@ The full product spec lives in the [Friendsmas Product Spec](https://claude.ai/c
 | Address | Who uses it |
 | --- | --- |
 | `/host` | You, on the laptop (needs the host password) |
-| `/stage?c=<event code>` | The TV. Open it with **Launch stage** in the control room |
+| `/tv` | Connect a TV: it shows a 4-digit code; type it into **Connect a TV** in the control room and the TV becomes the stage (and remembers it next time) |
+| `/stage?c=<event code>` | The TV screen. Follows the control room live. **Open TV screen on this laptop** opens it on the laptop, for HDMI |
 | `/e/<event code>` | Guests' phones. Use **Copy guest link** in the control room |
 
 ## How it works

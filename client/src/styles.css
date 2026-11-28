@@ -4958,3 +4958,66 @@ img.member__emoji {
   font-size: 0.85vw;
   max-width: none;
 }
+
+/* Connecting a TV */
+.tv-pair {
+  min-height: 100vh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 1.6vw;
+  text-align: center;
+  padding: 4vw;
+}
+.tv-pair__lede {
+  margin: 0;
+  font-size: 2.4vw;
+  color: var(--mist);
+}
+.tv-pair__code {
+  margin: 0;
+  font-size: 12vw;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--brass);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.tv-pair__steps {
+  margin: 0;
+  font-size: 2vw;
+  text-align: left;
+  display: grid;
+  gap: 0.6vw;
+}
+.tv-pair__error {
+  color: var(--cranberry);
+  font-size: 1.4vw;
+}
+.connect-tv {
+  position: relative;
+}
+.connect-tv__pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.4rem);
+  z-index: 40;
+  width: 20rem;
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.9rem;
+  border-radius: 14px;
+  background: var(--pine-2);
+  border: 1px solid var(--spruce-line);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+.connect-tv__pop p {
+  margin: 0;
+}
+.connect-tv__code {
+  width: 6rem;
+  font-size: 1.3rem;
+  letter-spacing: 0.2em;
+  text-align: center;
+}
+.stage__link { color: var(--brass); }

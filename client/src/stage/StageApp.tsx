@@ -130,6 +130,11 @@ export function StageApp({ code }: { code: string }) {
       <main className="stage stage--message">
         <Wordmark className="wordmark--stage" />
         <p className="stage__lede">{unauthorized}</p>
+        <p className="stage__lede">
+          <a className="stage__link" href="/tv?new">
+            Connect this screen with a code
+          </a>
+        </p>
       </main>
     );
   }

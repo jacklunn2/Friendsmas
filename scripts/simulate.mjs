@@ -114,6 +114,19 @@ async function main() {
   check(true, "guest list added");
 
   const stage = await new Client({ role: "stage", code }).open();
+
+  // Connecting a TV with a 4-digit code
+  const pairing = await (await fetch(`${BASE}/api/tv/pair`, { method: "POST" })).json();
+  check(/^\d{4}$/.test(pairing.code), `a TV gets a pairing code (${pairing.code})`);
+  const wrongCode = await host.req("tv.connect", { code: pairing.code === "0000" ? "0001" : "0000" }).catch((e) => e.message);
+  check(/No TV is showing that code/.test(wrongCode), "a wrong TV code is refused");
+  const waitingTv = await (await fetch(`${BASE}/api/tv/pair/${pairing.id}`)).json();
+  check(waitingTv.status === "waiting", "the TV waits for the host");
+  await host.req("tv.connect", { code: pairing.code });
+  const connectedTv = await (await fetch(`${BASE}/api/tv/pair/${pairing.id}`)).json();
+  check(connectedTv.status === "connected" && connectedTv.eventCode === code, "typing the code sends the TV the stage link");
+  const usedTv = await fetch(`${BASE}/api/tv/pair/${pairing.id}`);
+  check(usedTv.status === 404, "a pairing code only works once");
   const phones = {};
   for (const name of names.slice(0, 10)) {
     const c = await new Client({ role: "player", code }).open();

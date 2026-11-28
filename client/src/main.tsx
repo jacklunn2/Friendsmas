@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { HostApp } from "./host/HostApp";
 import { PlayerApp } from "./player/PlayerApp";
 import { StageApp } from "./stage/StageApp";
+import { TvPair } from "./stage/TvPair";
 import { Wordmark } from "./ui";
 import "./styles.css";
 
@@ -23,6 +24,10 @@ function App() {
   if (path === "/host") {
     document.title = "Control room · Friendsmas";
     return <HostApp />;
+  }
+  if (path === "/tv") {
+    document.title = "Connect a TV · Friendsmas";
+    return <TvPair />;
   }
   if (path === "/stage") {
     document.title = "Stage · Friendsmas";
